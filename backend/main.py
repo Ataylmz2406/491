@@ -3,7 +3,7 @@ import os
 import torch
 import torch.nn as nn
 from torchvision import models, transforms
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 from contextlib import asynccontextmanager
@@ -79,9 +79,21 @@ def read_root():
     return {"message": "Skin Cancer Classification API (EfficientNet-B0) is running"}
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)):
+async def predict(
+    file: UploadFile = File(...),
+    patient_id: str = Form(None),
+    diagnosis: str = Form(None),
+    lesion_location: str = Form(None)
+):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # Log the received metadata (Simulation of saving to DB)
+    print(f"--- New Prediction Request ---")
+    print(f"Patient ID: {patient_id}")
+    print(f"Ground Truth Diagnosis: {diagnosis}")
+    print(f"Location: {lesion_location}")
+    print(f"-----------------------------")
 
     try:
         # 1. Read and Transform Image
@@ -109,7 +121,8 @@ async def predict(file: UploadFile = File(...)):
         return {
             "class": predicted_label,
             "confidence": f"{confidence_score:.2f}%",
-            "raw_probability": probability 
+            "raw_probability": probability,
+            "patient_id": patient_id 
         }
 
     except Exception as e:
