@@ -25,9 +25,11 @@ const DIAGNOSIS_OPTIONS = [
   "Basal Cell Carcinoma",
   "Actinic Keratosis",
   "Benign Keratosis",
+  "Benign keratinocytic lesion",
   "Dermatofibroma",
   "Vascular Lesion",
   "Squamous Cell Carcinoma",
+  "Inflammatory and infectious",
   "Benign Other",
   "Malignant Other",
   "Image is not applicable / Too small"
