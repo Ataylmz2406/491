@@ -6,7 +6,7 @@ $backend = Join-Path $root 'backend'
 $frontend = Join-Path $root 'frontend'
 
 Write-Host "Starting backend in a new PowerShell window..."
-Start-Process powershell -ArgumentList "-NoExit","-Command","Set-Location -LiteralPath '$backend'; if(-not (Test-Path '.\.venv')){ python -m venv .\.venv }; . .\.venv\Scripts\Activate.ps1; pip install -r requirements.txt; python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000" -WorkingDirectory $backend
+Start-Process powershell -ArgumentList "-NoExit","-Command","Set-Location -LiteralPath '$backend'; if(-not (Test-Path '.\venv')){ python -m venv .\venv }; . .\venv\Scripts\Activate.ps1; pip install -r requirements.txt; python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000" -WorkingDirectory $backend
 
 Write-Host "Starting frontend in a new PowerShell window..."
 Start-Process powershell -ArgumentList "-NoExit","-Command","Set-Location -LiteralPath '$frontend'; npm install; npm run dev" -WorkingDirectory $frontend
