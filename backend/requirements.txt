@@ -4,3 +4,8 @@ python-multipart
 torch
 torchvision
 pillow
+timm
+pandas
+scikit-learn
+tqdm
+matplotlib

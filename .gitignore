@@ -1,0 +1,6 @@
+*.pth
+__pycache__/
+backend/venv/
+backend/static/
+node_modules/
+.DS_Store
