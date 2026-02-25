@@ -23,13 +23,18 @@ from model_utils import (
 # --- CONFIGURATION ---
 MODEL_WEIGHTS = "Weights_DualEffV2_Funnel_20251129_1830.pth"
 
-# Prefer MPS (Apple Silicon GPU) over CPU on macOS
+# Prefer CUDA > MPS (Apple Silicon) > CPU
 if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
-elif torch.backends.mps.is_available():
-    DEVICE = torch.device("mps")
 else:
-    DEVICE = torch.device("cpu")
+    try:
+        if torch.backends.mps.is_available():
+            DEVICE = torch.device("mps")
+        else:
+            DEVICE = torch.device("cpu")
+    except AttributeError:
+        # torch.backends.mps not available on older PyTorch / Windows
+        DEVICE = torch.device("cpu")
 
 HEATMAP_DIR = "static/heatmaps"
 
@@ -77,6 +82,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan, title="SUDerm API", version="1.0.0")
 
 # --- STATIC FILES (for Grad-CAM heatmaps) ---
+os.makedirs(HEATMAP_DIR, exist_ok=True)
 app.mount("/heatmap", StaticFiles(directory=HEATMAP_DIR), name="heatmaps")
 
 # --- MIDDLEWARE ---

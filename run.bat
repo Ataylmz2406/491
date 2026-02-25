@@ -29,8 +29,8 @@ call venv\Scripts\activate.bat
 pip install --upgrade pip
 pip install -r requirements.txt
 
-:: Start uvicorn in a new window so it doesn't block
-start "Backend Server" cmd /k "uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+:: Start uvicorn in a new window WITH venv activated
+start "Backend Server" cmd /k "cd /d %CD% && call venv\Scripts\activate.bat && uvicorn main:app --reload --host 0.0.0.0 --port 8000"
 cd ..
 
 :: 3. Setup Frontend
