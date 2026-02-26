@@ -213,7 +213,11 @@ async def predict(
             },
             "details": {
                 "top_class": CLASS_NAMES[probs.argmax().item()],
-                "top_prob": float(probs.max().item() * 100)
+                "top_prob": float(probs.max().item() * 100),
+                "all_predictions": [
+                    {"class": name, "prob": float(prob * 100)}
+                    for name, prob in zip(CLASS_NAMES, probs_np)
+                ]
             }
         }
 

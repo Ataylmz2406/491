@@ -32,6 +32,7 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
             <div className="p-8">
                 <h3 className="mb-6 text-lg font-bold text-gray-900">Diagnosis Result</h3>
 
+                {/* Unified Prediction Display */}
                 <div className={`p-6 mb-6 rounded-xl border ${getResultColor(result.prediction)} flex items-center gap-4`}>
                     {result.prediction.toLowerCase().includes('malignant')
                         ? <AlertCircle className="shrink-0 w-12 h-12" />
@@ -39,13 +40,38 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                     }
                     <div>
                         <div className="text-xs font-bold uppercase opacity-60">AI Prediction</div>
-                        <div className="text-4xl font-bold">{result.prediction}</div>
+                        <div className="text-base font-bold text-gray-800">{result.prediction}</div>
                     </div>
                     <div className="ml-auto text-right">
                         <div className="text-xs font-bold uppercase opacity-60">Confidence</div>
-                        <div className="text-4xl font-bold">{result.confidence_score.toFixed(1)}%</div>
+                        <div className="text-base font-bold text-gray-800">{result.confidence_score.toFixed(1)}%</div>
                     </div>
                 </div>
+
+                {/* All Predictions Table */}
+                {result.details?.all_predictions && (
+                    <div className="mb-6">
+                        <div className="text-xs font-bold uppercase opacity-60 mb-2">All Class Predictions</div>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full text-sm text-left border rounded-lg">
+                                <thead>
+                                    <tr className="bg-gray-100">
+                                        <th className="px-3 py-2 font-semibold">Class</th>
+                                        <th className="px-3 py-2 font-semibold">Probability (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {result.details.all_predictions.map((pred, idx) => (
+                                        <tr key={pred.class} className={pred.class === result.prediction ? 'bg-green-50 font-bold' : ''}>
+                                            <td className="px-3 py-2">{pred.class}</td>
+                                            <td className="px-3 py-2">{pred.prob.toFixed(2)}%</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid gap-4 md:grid-cols-2">
                     <div className="p-4 bg-gray-50 rounded-lg">
