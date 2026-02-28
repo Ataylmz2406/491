@@ -5,6 +5,10 @@ import ImageUploader from './components/ImageUploader';
 import DiagnosisResult from './components/DiagnosisResult';
 
 function App() {
+  // --- Landing / Navigation State ---
+  const [showLanding, setShowLanding] = useState(true);
+  const [userType, setUserType] = useState(null); // 'doctor' | 'researcher' | 'personal'
+
   // --- Image State ---
   const [dermFile, setDermFile] = useState(null);
   const [dermPreview, setDermPreview] = useState(null);
@@ -15,6 +19,9 @@ function App() {
   const [location, setLocation] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
   const [imageNotApplicable, setImageNotApplicable] = useState(false);
+  const [ageGroup, setAgeGroup] = useState('');
+  const [sex, setSex] = useState('');
+  const [skinTone, setSkinTone] = useState('');
 
   // --- App State ---
   const [loading, setLoading] = useState(false);
@@ -90,6 +97,34 @@ function App() {
     }
   };
 
+  // if landing page should be shown, render that instead of the app UI
+  if (showLanding) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center space-y-6 bg-gray-50">
+        <h1 className="text-4xl font-bold">Welcome to the Skin Diagnostics Portal</h1>
+        <p className="text-lg text-gray-600">Please choose an option to continue:</p>
+        <div className="flex flex-col sm:flex-row gap-4">
+          {[
+            { label: 'For Doctors', type: 'doctor' },
+            { label: 'For Researchers', type: 'researcher' },
+            { label: 'For Personal Use', type: 'personal' }
+          ].map(({ label, type }) => (
+            <button
+              key={label}
+              onClick={() => {
+                setUserType(type);
+                setShowLanding(false);
+              }}
+              className="px-8 py-4 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden font-sans text-gray-800 bg-gray-50">
       <Sidebar
@@ -99,6 +134,13 @@ function App() {
         setDiagnosis={setDiagnosis}
         imageNotApplicable={imageNotApplicable}
         setImageNotApplicable={setImageNotApplicable}
+        showGroundTruth={userType !== 'personal'}
+        ageGroup={ageGroup}
+        setAgeGroup={setAgeGroup}
+        sex={sex}
+        setSex={setSex}
+        skinTone={skinTone}
+        setSkinTone={setSkinTone}
       />
 
       {/* --- Main Content Area --- */}
@@ -116,23 +158,29 @@ function App() {
             clinPreview={clinPreview}
             handleFileChange={handleFileChange}
             clearFile={clearFile}
+            showClinical={userType !== 'personal'}
           />
 
           {/* Submit Bar */}
-          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-6 border-t border-gray-200">
             <div className="text-xs text-none text-gray-400">
               <p>Ensure images are high-resolution and focused.</p>
             </div>
-            <button
-              onClick={handleSubmit}
-              disabled={loading || !dermFile}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-md transition-all
-                        ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-lg active:scale-95'}
-                    `}
-            >
-              {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
-              {loading ? 'Processing...' : 'Run Diagnostics'}
-            </button>
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <button
+                onClick={handleSubmit}
+                disabled={loading || !dermFile}
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-md transition-all
+                          ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-lg active:scale-95'}
+                      `}
+              >
+                {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
+                {loading ? 'Processing...' : 'Run Diagnostics'}
+              </button>
+              <p className="mt-2 sm:mt-0 text-xs text-red-500 font-medium">
+                Please consult a medical professional after use.
+              </p>
+            </div>
           </div>
 
           {error && (

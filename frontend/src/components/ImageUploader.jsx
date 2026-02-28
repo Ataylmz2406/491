@@ -2,7 +2,8 @@ import React from 'react';
 import { Camera, ImageIcon, Upload, X } from 'lucide-react';
 
 export default function ImageUploader({
-    dermFile, dermPreview, clinFile, clinPreview, handleFileChange, clearFile
+    dermFile, dermPreview, clinFile, clinPreview, handleFileChange, clearFile,
+    showClinical = true
 }) {
     return (
         <div className="grid gap-6 mb-8 md:grid-cols-2">
@@ -31,7 +32,8 @@ export default function ImageUploader({
             </div>
 
             {/* Clinical */}
-            <div className={`relative p-6 transition-all bg-white border-2 border-dashed rounded-xl ${!clinFile ? 'border-gray-300 hover:border-gray-400 hover:bg-gray-50' : 'border-indigo-500 bg-indigo-50/10'}`}>
+            {showClinical && (
+              <div className={`relative p-6 transition-all bg-white border-2 border-dashed rounded-xl ${!clinFile ? 'border-gray-300 hover:border-gray-400 hover:bg-gray-50' : 'border-indigo-500 bg-indigo-50/10'}`}>
                 <div className="flex justify-between mb-4">
                     <h3 className="flex items-center gap-2 font-semibold text-gray-700">
                         <ImageIcon className="w-5 h-5 text-indigo-600" /> Clinical
@@ -53,6 +55,7 @@ export default function ImageUploader({
                     </div>
                 )}
             </div>
+            )}
         </div>
     );
 }
