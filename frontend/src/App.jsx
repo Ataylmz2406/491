@@ -146,8 +146,26 @@ function App() {
       {/* --- Main Content Area --- */}
       <main className="flex-1 overflow-y-auto">
         <header className="px-8 py-6 bg-white border-b border-gray-200">
-          <h2 className="text-2xl font-semibold text-gray-800">New Analysis Session</h2>
-          <p className="text-sm text-gray-500">Upload imagery to initialize the Dual-Branch EfficientNetV2 model.</p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold text-gray-800">New Analysis Session</h2>
+              <p className="text-sm text-gray-500">Upload imagery to initialize the Dual-Branch EfficientNetV2 model.</p>
+            </div>
+
+            {/* User mode indicator + switcher */}
+            <div className="flex items-center gap-3">
+              <select
+                value={userType || ''}
+                onChange={(e) => setUserType(e.target.value)}
+                className="text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none"
+                aria-label="Switch user mode"
+              >
+                <option value="doctor">For Doctors</option>
+                <option value="researcher">For Researchers</option>
+                <option value="personal">For Personal Use</option>
+              </select>
+            </div>
+          </div>
         </header>
 
         <div className="max-w-5xl p-8 mx-auto">
