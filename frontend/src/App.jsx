@@ -3,6 +3,7 @@ import { Activity, AlertCircle } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import ImageUploader from './components/ImageUploader';
 import DiagnosisResult from './components/DiagnosisResult';
+import PatientHistory from './components/PatientHistory';
 
 function App() {
   // --- Landing / Navigation State ---
@@ -27,6 +28,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [showPatientHistory, setShowPatientHistory] = useState(false);
 
   // --- Handlers ---
   const handleFileChange = (e, type) => {
@@ -152,8 +154,17 @@ function App() {
               <p className="text-sm text-gray-500">Upload imagery to initialize the Dual-Branch EfficientNetV2 model.</p>
             </div>
 
-            {/* User mode indicator + switcher */}
+            {/* User mode indicator + switcher + Patient History button */}
             <div className="flex items-center gap-3">
+              {(userType === 'doctor' || userType === 'personal') && (
+                <button
+                  onClick={() => setShowPatientHistory(true)}
+                  className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2 transition"
+                  aria-label="View patient history"
+                >
+                  Patient History
+                </button>
+              )}
               <select
                 value={userType || ''}
                 onChange={(e) => setUserType(e.target.value)}
@@ -168,37 +179,40 @@ function App() {
           </div>
         </header>
 
-        <div className="max-w-5xl p-8 mx-auto">
-          <ImageUploader
-            dermFile={dermFile}
-            dermPreview={dermPreview}
-            clinFile={clinFile}
-            clinPreview={clinPreview}
-            handleFileChange={handleFileChange}
-            clearFile={clearFile}
-            showClinical={userType !== 'personal'}
-          />
+        <div className="max-w-5xl mx-auto">
+          <div className="p-8">
+            <ImageUploader
+              dermFile={dermFile}
+              dermPreview={dermPreview}
+              clinFile={clinFile}
+              clinPreview={clinPreview}
+              handleFileChange={handleFileChange}
+              clearFile={clearFile}
+              showClinical={userType !== 'personal'}
+            />
 
           {/* Submit Bar */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-6 border-t border-gray-200">
-            <div className="text-xs text-none text-gray-400">
-              <p>Ensure images are high-resolution and focused.</p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-6 border-t border-gray-200 gap-4">
+            <div className="flex items-center gap-4">
+              <div className="text-xs text-none text-gray-400">
+                <p>Ensure images are high-resolution and focused.</p>
+              </div>
+              {userType === 'personal' && (
+                <p className="text-xs text-red-500 font-medium">
+                  Please consult a medical professional after use.
+                </p>
+              )}
             </div>
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <button
-                onClick={handleSubmit}
-                disabled={loading || !dermFile}
-                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-md transition-all
-                          ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-lg active:scale-95'}
-                      `}
-              >
-                {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
-                {loading ? 'Processing...' : 'Run Diagnostics'}
-              </button>
-              <p className="mt-2 sm:mt-0 text-xs text-red-500 font-medium">
-                Please consult a medical professional after use.
-              </p>
-            </div>
+            <button
+              onClick={handleSubmit}
+              disabled={loading || !dermFile}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-md transition-all
+                        ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-lg active:scale-95'}
+                    `}
+            >
+              {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
+              {loading ? 'Processing...' : 'Run Diagnostics'}
+            </button>
           </div>
 
           {error && (
@@ -208,7 +222,27 @@ function App() {
           )}
 
           <DiagnosisResult result={result} location={location} />
+          </div>
         </div>
+
+        {/* Patient History Modal */}
+        {showPatientHistory && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-gray-900">Patient History</h3>
+                <button
+                  onClick={() => setShowPatientHistory(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-light"
+                  aria-label="Close modal"
+                >
+                  ×
+                </button>
+              </div>
+              <PatientHistory userType={userType} />
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
