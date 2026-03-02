@@ -2,6 +2,22 @@ import React from 'react';
 import { AlertCircle, CheckCircle, Info, Clipboard } from 'lucide-react';
 
 export default function DiagnosisResult({ result, location }) {
+    // ...existing code...
+    // Mapping from abbreviation to full name
+    const CLASS_NAME_MAP = {
+        "AKIEC": "Actinic keratosis / intraepidermal carcinoma",
+        "BCC": "Basal cell carcinoma",
+        "BEN_OTH": "Other benign proliferations, including collision tumors",
+        "BKL": "Benign keratinocytic lesion",
+        "DF": "Dermatofibroma",
+        "INF": "Inflammatory and infectious conditions",
+        "MAL_OTH": "Other malignant proliferations, including collision tumors",
+        "MEL": "Melanoma",
+        "NV": "Melanocytic nevus",
+        "SCCKA": "Squamous cell carcinoma / keratoacanthoma",
+        "VASC": "Vascular lesions and hemorrhage"
+    };
+
     const copyClinicalNote = () => {
         if (!result) return;
         const note = `
@@ -27,20 +43,25 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
 
     if (!result) return null;
 
+    // Sort predictions by probability descending
+    const sortedPredictions = result.details?.all_predictions
+        ? [...result.details.all_predictions].sort((a, b) => b.prob - a.prob)
+        : [];
+
     return (
         <div className="mt-8 overflow-hidden bg-white border border-gray-200 shadow-xl rounded-2xl animate-fade-in">
             <div className="p-8">
                 <h3 className="mb-6 text-lg font-bold text-gray-900">Diagnosis Result</h3>
 
                 {/* Unified Prediction Display */}
-                <div className={`p-6 mb-6 rounded-xl border ${getResultColor(result.prediction)} flex items-center gap-4`}>
+                <div className={`p-6 mb-4 rounded-xl border ${getResultColor(result.prediction)} flex items-center gap-4`}>
                     {result.prediction.toLowerCase().includes('malignant')
                         ? <AlertCircle className="shrink-0 w-12 h-12" />
                         : <CheckCircle className="shrink-0 w-12 h-12" />
                     }
                     <div>
                         <div className="text-xs font-bold uppercase opacity-60">AI Prediction</div>
-                        <div className="text-base font-bold text-gray-800">{result.prediction}</div>
+                        <div className="text-base font-bold text-gray-800">{CLASS_NAME_MAP[result.prediction] || result.prediction}</div>
                     </div>
                     <div className="ml-auto text-right">
                         <div className="text-xs font-bold uppercase opacity-60">Confidence</div>
@@ -48,8 +69,20 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                     </div>
                 </div>
 
+                {/* Top Differential Class (moved up) */}
+                <div className="mb-6 flex items-center gap-4">
+                    <div>
+                        <div className="text-xs font-bold uppercase opacity-60">Top Differential Class</div>
+                        <div className="text-base font-bold text-gray-800">{CLASS_NAME_MAP[result.details?.top_class] || result.details?.top_class}</div>
+                    </div>
+                    <div className="ml-auto text-right">
+                        <div className="text-xs font-bold uppercase opacity-60">Probability</div>
+                        <div className="text-base font-bold text-gray-800">{result.details?.top_prob?.toFixed(2)}%</div>
+                    </div>
+                </div>
+
                 {/* All Predictions Table */}
-                {result.details?.all_predictions && (
+                {sortedPredictions.length > 0 && (
                     <div className="mb-6">
                         <div className="text-xs font-bold uppercase opacity-60 mb-2">All Class Predictions</div>
                         <div className="overflow-x-auto">
@@ -61,9 +94,9 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {result.details.all_predictions.map((pred, idx) => (
+                                    {sortedPredictions.map((pred, idx) => (
                                         <tr key={pred.class} className={pred.class === result.prediction ? 'bg-green-50 font-bold' : ''}>
-                                            <td className="px-3 py-2">{pred.class}</td>
+                                            <td className="px-3 py-2">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
                                             <td className="px-3 py-2">{pred.prob.toFixed(2)}%</td>
                                         </tr>
                                     ))}
@@ -73,16 +106,7 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                     </div>
                 )}
 
-                <div className="grid gap-4 md:grid-cols-2">
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-500">Top Differential Class</span>
-                        <div className="text-xl font-bold text-slate-800 mt-1">{result.details?.top_class}</div>
-                    </div>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-500">Class Probability</span>
-                        <div className="text-xl font-mono font-bold text-slate-600 mt-1">{result.details?.top_prob?.toFixed(2)}%</div>
-                    </div>
-                </div>
+                {/* Removed duplicate class probability section */}
 
                 {/* Clinical Intelligence Card */}
                 {result?.metadata?.zoom_check && result.metadata.zoom_check !== 'OK' && result.metadata.zoom_check !== 'N/A' && (
