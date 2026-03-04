@@ -179,49 +179,51 @@ function App() {
           </div>
         </header>
 
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <div className="p-8">
-            <ImageUploader
-              dermFile={dermFile}
-              dermPreview={dermPreview}
-              clinFile={clinFile}
-              clinPreview={clinPreview}
-              handleFileChange={handleFileChange}
-              clearFile={clearFile}
-              showClinical={userType !== 'personal'}
-            />
-
-          {/* Submit Bar */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-6 border-t border-gray-200 gap-4">
-            <div className="flex items-center gap-4">
-              <div className="text-xs text-none text-gray-400">
-                <p>Ensure images are high-resolution and focused.</p>
+            <div className="flex flex-row gap-8 items-start">
+              {/* Left side: Uploads and button */}
+              <div className="flex flex-col w-full max-w-md gap-4">
+                <ImageUploader
+                  dermFile={dermFile}
+                  dermPreview={dermPreview}
+                  clinFile={clinFile}
+                  clinPreview={clinPreview}
+                  handleFileChange={handleFileChange}
+                  clearFile={clearFile}
+                  showClinical={userType !== 'personal'}
+                />
+                {/* Submit Bar below uploads */}
+                <div className="flex flex-col gap-2 pt-4">
+                  <div className="text-xs text-gray-400">
+                    <p>Ensure images are high-resolution and focused.</p>
+                  </div>
+                  {userType === 'personal' && (
+                    <p className="text-xs text-red-500 font-medium">
+                      Please consult a medical professional after use.
+                    </p>
+                  )}
+                  <button
+                    onClick={handleSubmit}
+                    disabled={loading || !dermFile}
+                    className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-md transition-all
+                              ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-lg active:scale-95'}`}
+                  >
+                    {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
+                    {loading ? 'Processing...' : 'Run Diagnostics'}
+                  </button>
+                  {error && (
+                    <div className="p-2 mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg animate-fade-in flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" /> {error}
+                    </div>
+                  )}
+                </div>
               </div>
-              {userType === 'personal' && (
-                <p className="text-xs text-red-500 font-medium">
-                  Please consult a medical professional after use.
-                </p>
-              )}
+              {/* Right side: Diagnosis Result */}
+              <div className="flex-1 flex flex-col items-center justify-start">
+                <DiagnosisResult result={result} location={location} />
+              </div>
             </div>
-            <button
-              onClick={handleSubmit}
-              disabled={loading || !dermFile}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-md transition-all
-                        ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-lg active:scale-95'}
-                    `}
-            >
-              {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
-              {loading ? 'Processing...' : 'Run Diagnostics'}
-            </button>
-          </div>
-
-          {error && (
-            <div className="p-4 mt-6 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg animate-fade-in flex items-center gap-2">
-              <AlertCircle className="w-4 h-4" /> {error}
-            </div>
-          )}
-
-          <DiagnosisResult result={result} location={location} />
           </div>
         </div>
 
