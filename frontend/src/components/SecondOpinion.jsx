@@ -4,39 +4,64 @@ export default function SecondOpinion({ onViewHistory, questionMetadata, doctorP
   // patient-specific states
   const [patientId, setPatientId] = useState('');
   const [currentHypothesis, setCurrentHypothesis] = useState('');
-  const [uploads, setUploads] = useState([]); // {file, preview, comment, posted}
+  const [posts, setPosts] = useState([]); // array of { id, uploads: [], caption: '', comments: [], posted: false }
 
   const handleFileAdd = (e) => {
     const files = Array.from(e.target.files);
     const newItems = files.map((file) => ({
       file,
-      preview: URL.createObjectURL(file),
-      comment: '',
-      posted: false
+      preview: URL.createObjectURL(file)
     }));
-    setUploads((prev) => [...prev, ...newItems]);
-  };
 
-  const updateComment = (idx, text) => {
-    setUploads((prev) => {
-      const copy = [...prev];
-      copy[idx].comment = text;
-      return copy;
-    });
-  };
-
-  const postComment = (idx) => {
-    setUploads((prev) => {
-      const copy = [...prev];
-      if (copy[idx].comment) {
-        copy[idx].posted = true;
+    setPosts((prev) => {
+      const lastPost = prev[prev.length - 1];
+      if (lastPost && !lastPost.posted) {
+        // Add to existing unposted post
+        const updatedPosts = [...prev];
+        updatedPosts[updatedPosts.length - 1].uploads = [...lastPost.uploads, ...newItems];
+        return updatedPosts;
+      } else {
+        // Create new post
+        const newPost = {
+          id: Date.now(),
+          uploads: newItems,
+          caption: '',
+          comments: [],
+          posted: false
+        };
+        return [...prev, newPost];
       }
-      return copy;
     });
   };
 
-  const removeUpload = (idx) => {
-    setUploads((prev) => prev.filter((_, i) => i !== idx));
+  const updateCaption = (postId, text) => {
+    setPosts((prev) => prev.map(post => post.id === postId ? { ...post, caption: text } : post));
+  };
+
+  const addComment = (postId, comment) => {
+    if (comment.trim()) {
+      setPosts((prev) => prev.map(post => post.id === postId ? { ...post, comments: [...post.comments, comment.trim()] } : post));
+    }
+  };
+
+  const removeComment = (postId, idx) => {
+    setPosts((prev) => prev.map(post => post.id === postId ? { ...post, comments: post.comments.filter((_, i) => i !== idx) } : post));
+  };
+
+  const postOpinion = (postId) => {
+    setPosts((prev) => prev.map(post => post.id === postId ? { ...post, posted: true } : post));
+  };
+
+  const viewHistory = () => {
+    onViewHistory({
+      ...questionMetadata,
+      patientId,
+      currentHypothesis
+    });
+  };
+
+  const removeUpload = (postId, idx) => {
+    setPosts((prev) => prev.map(post => post.id === postId ? { ...post, uploads: post.uploads.filter((_, i) => i !== idx) } : post));
   };
 
   return (
@@ -95,61 +120,127 @@ export default function SecondOpinion({ onViewHistory, questionMetadata, doctorP
           </select>
         </div>
       </div>
+
       <div className="mt-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">Upload Images</label>
         <label className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-full cursor-pointer">
-          Choose an image
+          Choose images
           <input type="file" multiple accept="image/*" onChange={handleFileAdd} className="hidden" />
         </label>
       </div>
 
-      {uploads.length > 0 && (
-        <div className="space-y-6">
-          {uploads.map((item, idx) => (
-            <div key={idx} className="border p-4 rounded-lg relative">
+      {posts.map((post) => (
+        <div key={post.id} className="border p-4 rounded-lg">
+          {patientId && (
+            <div className="flex justify-end mb-4">
               <button
-                className="absolute top-2 right-2 text-red-500 hover:text-red-700"
-                onClick={() => removeUpload(idx)}
+                onClick={viewHistory}
+                className="text-sm text-white bg-teal-600 hover:bg-teal-700 px-3 py-1 rounded"
               >
-                ✕
+                History / Metadata
               </button>
-              <img
-                src={item.preview}
-                alt="upload preview"
-                className="w-full max-w-xs object-contain mb-2"
-              />
+            </div>
+          )}
+          {post.uploads.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4 auto-rows-fr">
+              {post.uploads.map((item, idx) => (
+                <div key={idx} className="relative aspect-square">
+                  {!post.posted && (
+                    <button
+                      className="absolute top-1 right-1 text-red-500 hover:text-red-700 bg-white rounded-full p-1 z-10"
+                      onClick={() => removeUpload(post.id, idx)}
+                    >
+                      ✕
+                    </button>
+                  )}
+                  <img
+                    src={item.preview}
+                    alt={`upload ${idx + 1}`}
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!post.posted && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Caption</label>
               <textarea
-                value={item.comment}
-                onChange={(e) => updateComment(idx, e.target.value)}
-                placeholder="Comment on this image"
+                value={post.caption}
+                onChange={(e) => updateCaption(post.id, e.target.value)}
+                placeholder="Add a caption for the images..."
                 className="w-full px-3 py-2 border rounded-md"
-                disabled={item.posted}
+                rows={2}
               />
-              <div className="mt-2 flex gap-2">
-                {patientId && (
-                  <button
-                    onClick={() => onViewHistory({
-                      ...questionMetadata,
-                      patientId,
-                      currentHypothesis
-                    })}
-                    className="text-sm text-white bg-teal-600 hover:bg-teal-700 px-3 py-1 rounded"
-                  >
-                    History / Metadata
-                  </button>
-                )}
+            </div>
+          )}
+
+          {post.posted && (
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-700">Caption:</p>
+              <p className="text-gray-800">{post.caption || 'No caption'}</p>
+            </div>
+          )}
+
+          {!post.posted && (
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={() => postOpinion(post.id)}
+                disabled={!patientId.trim() || post.uploads.length === 0}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                Post Second Opinion
+              </button>
+            </div>
+          )}
+
+          {post.posted && (
+            <div className="border-t pt-4">
+              <h3 className="text-lg font-medium mb-2">Comments</h3>
+              <div className="flex gap-2 mb-4">
+                <textarea
+                  placeholder="Add a comment..."
+                  className="flex-1 px-3 py-2 border rounded-md"
+                  rows={2}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      addComment(post.id, e.target.value);
+                      e.target.value = '';
+                    }
+                  }}
+                />
                 <button
-                  onClick={() => postComment(idx)}
-                  disabled={!item.comment || item.posted}
-                  className={`text-sm text-white px-3 py-1 rounded ${item.posted ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                  onClick={(e) => {
+                    const textarea = e.target.previousSibling;
+                    addComment(post.id, textarea.value);
+                    textarea.value = '';
+                  }}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md"
                 >
-                  {item.posted ? 'Posted' : 'Post'}
+                  Add Comment
                 </button>
               </div>
+              {post.comments.length > 0 && (
+                <div className="space-y-2">
+                  {post.comments.map((comment, idx) => (
+                    <div key={idx} className="flex justify-between items-start bg-gray-50 p-2 rounded">
+                      <p className="flex-1">{comment}</p>
+                      <button
+                        onClick={() => removeComment(post.id, idx)}
+                        className="text-red-500 hover:text-red-700 ml-2"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          ))}
+          )}
         </div>
-      )}
+      ))}
     </div>
   );
 }
