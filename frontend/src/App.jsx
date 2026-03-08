@@ -5,11 +5,15 @@ import ImageUploader from './components/ImageUploader';
 import DiagnosisResult from './components/DiagnosisResult';
 import PatientHistory from './components/PatientHistory';
 import SecondOpinion from './components/SecondOpinion';
+import Login from './components/Login';
 
 function App() {
   // --- Landing / Navigation State ---
   const [showLanding, setShowLanding] = useState(true);
+  const [showLogin, setShowLogin] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
   const [userType, setUserType] = useState(null); // 'doctor' | 'researcher' | 'personal'
+  const [loginData, setLoginData] = useState(null); // store credentials/misc info
 
   // --- Image State ---
   const [dermFile, setDermFile] = useState(null);
@@ -40,14 +44,14 @@ function App() {
   const [doctorProfile, setDoctorProfile] = useState({ name: '', info: '' });
 
   React.useEffect(() => {
-    if (userType === 'doctor') {
+    if (userType === 'doctor' && loggedIn) {
       // simulate fetching the logged-in doctor's details
-      // in a real app this would hit an auth/user endpoint
+      // in a real app this would hit an auth/user endpoint using loginData
       setDoctorProfile({ name: 'Dr. Alice Example', info: 'Dermatology Dept.' });
     } else {
       setDoctorProfile({ name: '', info: '' });
     }
-  }, [userType]);
+  }, [userType, loggedIn]);
 
   React.useEffect(() => {
     if (userType !== 'doctor') {
@@ -56,6 +60,24 @@ function App() {
   }, [userType]);
 
   // --- Handlers ---
+  const handleUserTypeChoice = (type) => {
+    setUserType(type);
+    setShowLanding(false);
+    setShowLogin(true);
+    setLoggedIn(false);
+  };
+
+  const handleLoginSuccess = (data) => {
+    setLoginData(data);
+    setLoggedIn(true);
+    setShowLogin(false);
+  };
+
+  const handleLoginBack = () => {
+    setUserType(null);
+    setShowLanding(true);
+    setShowLogin(false);
+  };
   const handleFileChange = (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -152,10 +174,7 @@ function App() {
           ].map(({ label, type }) => (
             <button
               key={label}
-              onClick={() => {
-                setUserType(type);
-                setShowLanding(false);
-              }}
+              onClick={() => handleUserTypeChoice(type)}
               className="px-8 py-4 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
             >
               {label}
@@ -164,6 +183,11 @@ function App() {
         </div>
       </div>
     );
+  }
+
+  // show login form if required
+  if (showLogin && userType) {
+    return <Login userType={userType} onLoginSuccess={handleLoginSuccess} onBack={handleLoginBack} />;
   }
 
   return (
@@ -197,6 +221,15 @@ function App() {
                   ? 'Upload imagery to initialize the Dual-Branch EfficientNetV2 model.'
                   : 'Submit your second-opinion images and comments.'}
               </p>
+              {loggedIn && loginData && (
+                <p className="text-xs text-gray-600 mt-1">
+                  {userType === 'doctor' && (
+                    <span>Hospital: {loginData.hospital} | ID: {loginData.doctorId}</span>
+                  )}
+                  {userType === 'researcher' && <span>Researcher: {loginData.email}</span>}
+                  {userType === 'personal' && <span>User: {loginData.email}</span>}
+                </p>
+              )}
             </div>
 
             {/* User mode indicator + switcher + Patient History button */}
@@ -229,7 +262,13 @@ function App() {
               )}
               <select
                 value={userType || ''}
-                onChange={(e) => setUserType(e.target.value)}
+                onChange={(e) => {
+                  const type = e.target.value;
+                  setUserType(type);
+                  // require re-login when switching modes
+                  setLoggedIn(false);
+                  setShowLogin(true);
+                }}
                 className="text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none"
                 aria-label="Switch user mode"
               >
