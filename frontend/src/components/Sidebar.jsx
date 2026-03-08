@@ -16,7 +16,8 @@ export default function Sidebar({
     showGroundTruth = true,
     ageGroup, setAgeGroup,
     sex, setSex,
-    skinTone, setSkinTone
+    skinTone, setSkinTone,
+    onLogoClick
 }) {
     // Age groups in 5-year bins
     const AGE_GROUPS = [
@@ -35,7 +36,10 @@ export default function Sidebar({
     return (
         <aside className="flex-shrink-0 w-80 bg-slate-900 text-white flex flex-col shadow-2xl">
             <div className="p-6 border-b border-slate-700 bg-slate-950">
-                <div className="flex items-center gap-2 mb-1">
+                <div
+                className={`flex items-center gap-2 mb-1 ${onLogoClick ? 'cursor-pointer' : ''}`}
+                onClick={onLogoClick}
+            >
                     <Activity className="w-6 h-6 text-teal-400" />
                     <h1 className="text-xl font-bold tracking-tight text-white">SUDerm</h1>
                 </div>

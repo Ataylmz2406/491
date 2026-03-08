@@ -206,6 +206,7 @@ function App() {
         setSex={setSex}
         skinTone={skinTone}
         setSkinTone={setSkinTone}
+        onLogoClick={() => setActiveTab('analysis')}
       />
 
       {/* --- Main Content Area --- */}
