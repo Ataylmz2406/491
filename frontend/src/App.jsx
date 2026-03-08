@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import ImageUploader from './components/ImageUploader';
 import DiagnosisResult from './components/DiagnosisResult';
 import PatientHistory from './components/PatientHistory';
+import SecondOpinion from './components/SecondOpinion';
 
 function App() {
   // --- Landing / Navigation State ---
@@ -24,11 +25,35 @@ function App() {
   const [sex, setSex] = useState('');
   const [skinTone, setSkinTone] = useState('');
 
+  // --- Clinical checkbox state ---
+  const [showClinCheckbox, setShowClinCheckbox] = useState(false);
+
   // --- App State ---
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [showPatientHistory, setShowPatientHistory] = useState(false);
+  const [modalQuestionMetadata, setModalQuestionMetadata] = useState(null);
+  const [activeTab, setActiveTab] = useState('analysis'); // or 'secondOpinion'
+
+  // doctor profile info pulled from login
+  const [doctorProfile, setDoctorProfile] = useState({ name: '', info: '' });
+
+  React.useEffect(() => {
+    if (userType === 'doctor') {
+      // simulate fetching the logged-in doctor's details
+      // in a real app this would hit an auth/user endpoint
+      setDoctorProfile({ name: 'Dr. Alice Example', info: 'Dermatology Dept.' });
+    } else {
+      setDoctorProfile({ name: '', info: '' });
+    }
+  }, [userType]);
+
+  React.useEffect(() => {
+    if (userType !== 'doctor') {
+      setActiveTab('analysis');
+    }
+  }, [userType]);
 
   // --- Handlers ---
   const handleFileChange = (e, type) => {
@@ -99,6 +124,20 @@ function App() {
     }
   };
 
+  // watch dermFile to clear checkbox/clinical when removed
+  React.useEffect(() => {
+    if (!dermFile) {
+      // hide checkbox and drop any clinical image
+      setShowClinCheckbox(false);
+      clearFile('clinical');
+    }
+  }, [dermFile]);
+
+  const handleOpenHistory = (metadata = null) => {
+    setModalQuestionMetadata(metadata);
+    setShowPatientHistory(true);
+  };
+
   // if landing page should be shown, render that instead of the app UI
   if (showLanding) {
     return (
@@ -150,20 +189,43 @@ function App() {
         <header className="px-8 py-6 bg-white border-b border-gray-200">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-gray-800">New Analysis Session</h2>
-              <p className="text-sm text-gray-500">Upload imagery to initialize the Dual-Branch EfficientNetV2 model.</p>
+              <h2 className="text-2xl font-semibold text-gray-800">
+                {activeTab === 'analysis' ? 'New Analysis Session' : 'Second Opinion'}
+              </h2>
+              <p className="text-sm text-gray-500">
+                {activeTab === 'analysis'
+                  ? 'Upload imagery to initialize the Dual-Branch EfficientNetV2 model.'
+                  : 'Submit your second-opinion images and comments.'}
+              </p>
             </div>
 
             {/* User mode indicator + switcher + Patient History button */}
             <div className="flex items-center gap-3">
               {(userType === 'doctor' || userType === 'personal') && (
                 <button
-                  onClick={() => setShowPatientHistory(true)}
+                  onClick={() => handleOpenHistory()}
                   className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2 transition"
                   aria-label="View patient history"
                 >
                   Patient History
                 </button>
+              )}
+              {/* tab switcher for doctors */}
+              {userType === 'doctor' && (
+                <div className="flex space-x-2">
+                  <button
+                    className={`px-4 py-2 rounded-lg text-sm font-medium ${activeTab === 'analysis' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                    onClick={() => setActiveTab('analysis')}
+                  >
+                    Analysis
+                  </button>
+                  <button
+                    className={`px-4 py-2 rounded-lg text-sm font-medium ${activeTab === 'secondOpinion' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                    onClick={() => setActiveTab('secondOpinion')}
+                  >
+                    Second Opinion
+                  </button>
+                </div>
               )}
               <select
                 value={userType || ''}
@@ -179,53 +241,92 @@ function App() {
           </div>
         </header>
 
-        <div className="max-w-6xl mx-auto">
-          <div className="p-8">
-            <div className="flex flex-row gap-8 items-start">
-              {/* Left side: Uploads and button */}
-              <div className="flex flex-col w-full max-w-md gap-4">
-                <ImageUploader
-                  dermFile={dermFile}
-                  dermPreview={dermPreview}
-                  clinFile={clinFile}
-                  clinPreview={clinPreview}
-                  handleFileChange={handleFileChange}
-                  clearFile={clearFile}
-                  showClinical={userType !== 'personal'}
-                />
-                {/* Submit Bar below uploads */}
-                <div className="flex flex-col gap-2 pt-4">
-                  <div className="text-xs text-gray-400">
-                    <p>Ensure images are high-resolution and focused.</p>
-                  </div>
-                  {userType === 'personal' && (
-                    <p className="text-xs text-red-500 font-medium">
-                      Please consult a medical professional after use.
-                    </p>
+        {activeTab === 'analysis' ? (
+          <div className="max-w-6xl mx-auto">
+            <div className="p-8">
+              <div className="flex flex-row gap-8 items-start">
+                {/* Left side: Uploads and button */}
+                <div className="flex flex-col w-full max-w-md gap-4">
+                  <ImageUploader
+                    dermFile={dermFile}
+                    dermPreview={dermPreview}
+                    clinFile={clinFile}
+                    clinPreview={clinPreview}
+                    handleFileChange={handleFileChange}
+                    clearFile={clearFile}
+                    showClinical={showClinCheckbox && userType !== 'personal'}
+                  />
+                  {/* checkbox only visible after a dermoscopic file is selected and not in personal mode */}
+                  {dermFile && userType !== 'personal' && (
+                    <label className="inline-flex items-center space-x-2 mt-2">
+                      <input
+                        type="checkbox"
+                        checked={showClinCheckbox}
+                        onChange={(e) => {
+                          setShowClinCheckbox(e.target.checked);
+                          if (!e.target.checked) {
+                            clearFile('clinical');
+                          }
+                        }}
+                        className="form-checkbox h-5 w-5 text-indigo-600"
+                      />
+                      <span className="text-sm text-gray-700">Include clinical image</span>
+                    </label>
                   )}
-                  <button
-                    onClick={handleSubmit}
-                    disabled={loading || !dermFile}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-md transition-all
-                              ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-lg active:scale-95'}`}
-                  >
-                    {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
-                    {loading ? 'Processing...' : 'Run Diagnostics'}
-                  </button>
-                  {error && (
-                    <div className="p-2 mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg animate-fade-in flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4" /> {error}
+                  {/* Submit Bar below uploads */}
+                  <div className="flex flex-col gap-2 pt-4">
+                    <div className="text-xs text-gray-400">
+                      <p>Ensure images are high-resolution and focused.</p>
                     </div>
-                  )}
+                    {userType === 'personal' && (
+                      <p className="text-xs text-red-500 font-medium">
+                        Please consult a medical professional after use.
+                      </p>
+                    )}
+                    <button
+                      onClick={handleSubmit}
+                      disabled={loading || !dermFile}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-md transition-all
+                                ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-lg active:scale-95'}`}
+                    >
+                      {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
+                      {loading ? 'Processing...' : 'Run Diagnostics'}
+                    </button>
+                    {error && (
+                      <div className="p-2 mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg animate-fade-in flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" /> {error}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              {/* Right side: Diagnosis Result */}
-              <div className="flex-1 flex flex-col items-center justify-start">
-                <DiagnosisResult result={result} location={location} />
+                {/* Right side: Diagnosis Result */}
+                <div className="flex-1 flex flex-col items-center justify-start">
+                  <DiagnosisResult result={result} location={location} />
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="max-w-6xl mx-auto p-8">
+            <SecondOpinion
+              onViewHistory={() => handleOpenHistory({
+                location,
+                diagnosis,
+                ageGroup,
+                sex,
+                skinTone,
+              })}
+              questionMetadata={{
+                location,
+                diagnosis,
+                ageGroup,
+                sex,
+                skinTone,
+              }}
+              doctorProfile={doctorProfile}
+            />
+          </div>
+        )}
 
         {/* Patient History Modal */}
         {showPatientHistory && (
@@ -241,7 +342,7 @@ function App() {
                   ×
                 </button>
               </div>
-              <PatientHistory userType={userType} />
+              <PatientHistory userType={userType} questionMetadata={modalQuestionMetadata} />
             </div>
           </div>
         )}

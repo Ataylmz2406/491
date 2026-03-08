@@ -1,6 +1,20 @@
 import React from 'react';
 import { FileText, Calendar, AlertCircle } from 'lucide-react';
 
+const CLASS_NAME_MAP = {
+  "AKIEC": "Actinic keratosis / intraepidermal carcinoma",
+  "BCC": "Basal cell carcinoma",
+  "BEN_OTH": "Other benign proliferations, including collision tumors",
+  "BKL": "Benign keratinocytic lesion",
+  "DF": "Dermatofibroma",
+  "INF": "Inflammatory and infectious conditions",
+  "MAL_OTH": "Other malignant proliferations, including collision tumors",
+  "MEL": "Melanoma",
+  "NV": "Melanocytic nevus",
+  "SCCKA": "Squamous cell carcinoma / keratoacanthoma",
+  "VASC": "Vascular lesions and hemorrhage"
+};
+
 // Mock patient data
 const MOCK_PATIENT = {
   name: 'John Mitchell',
@@ -42,7 +56,7 @@ const MOCK_PATIENT = {
   ]
 };
 
-export default function PatientHistory({ userType }) {
+export default function PatientHistory({ userType, questionMetadata }) {
   const getStatusColor = (status) => {
     switch (status) {
       case 'Treated':
@@ -82,6 +96,20 @@ export default function PatientHistory({ userType }) {
               </div>
             </div>
         </div>
+      {questionMetadata && (
+        <div className="mb-8 pb-8 border-b border-gray-200">
+          <h4 className="text-md font-semibold text-gray-800 mb-3">Question Metadata</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700">
+            <div><span className="font-medium">Location:</span> {questionMetadata.location || '—'}</div>
+            <div><span className="font-medium">Diagnosis:</span> {questionMetadata.diagnosis || '—'}</div>
+            <div><span className="font-medium">Age Group:</span> {questionMetadata.ageGroup || '—'}</div>
+            <div><span className="font-medium">Sex:</span> {questionMetadata.sex || '—'}</div>
+            <div><span className="font-medium">Skin Tone:</span> {questionMetadata.skinTone || '—'}</div>
+            <div><span className="font-medium">Patient ID:</span> {questionMetadata.patientId || '—'}</div>
+            <div><span className="font-medium">Hypothesis:</span> {questionMetadata.currentHypothesis ? (CLASS_NAME_MAP ? CLASS_NAME_MAP[questionMetadata.currentHypothesis] || questionMetadata.currentHypothesis : questionMetadata.currentHypothesis) : 'Not specified'}</div>
+          </div>
+        </div>
+      )}
 
       {/* Previous Diagnoses */}
       <div>
