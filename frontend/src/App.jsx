@@ -67,6 +67,12 @@ function App() {
     setLoggedIn(false);
   };
 
+  const handleGuestAccess = () => {
+    // Skip login, go straight to analysis
+    setLoggedIn(false);
+    setShowLogin(false);
+  };
+
   const handleLoginSuccess = (data) => {
     setLoginData(data);
     setLoggedIn(true);
@@ -187,7 +193,7 @@ function App() {
 
   // show login form if required
   if (showLogin && userType) {
-    return <Login userType={userType} onLoginSuccess={handleLoginSuccess} onBack={handleLoginBack} />;
+    return <Login userType={userType} onLoginSuccess={handleLoginSuccess} onBack={handleLoginBack} onGuestAccess={handleGuestAccess} />;
   }
 
   return (
@@ -210,7 +216,7 @@ function App() {
       />
 
       {/* --- Main Content Area --- */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 flex flex-col overflow-hidden">
         <header className="px-8 py-6 bg-white border-b border-gray-200">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -233,7 +239,7 @@ function App() {
               )}
             </div>
 
-            {/* User mode indicator + switcher + Patient History button */}
+            {/* User mode indicator + switcher + Patient History */}
             <div className="flex items-center gap-3">
               {(userType === 'doctor' || userType === 'personal') && (
                 <button
@@ -281,92 +287,107 @@ function App() {
           </div>
         </header>
 
-        {activeTab === 'analysis' ? (
-          <div className="max-w-6xl mx-auto">
-            <div className="p-8">
-              <div className="flex flex-row gap-8 items-start">
-                {/* Left side: Uploads and button */}
-                <div className="flex flex-col w-full max-w-md gap-4">
-                  <ImageUploader
-                    dermFile={dermFile}
-                    dermPreview={dermPreview}
-                    clinFile={clinFile}
-                    clinPreview={clinPreview}
-                    handleFileChange={handleFileChange}
-                    clearFile={clearFile}
-                    showClinical={showClinCheckbox && userType !== 'personal'}
-                  />
-                  {/* checkbox only visible after a dermoscopic file is selected and not in personal mode */}
-                  {dermFile && userType !== 'personal' && (
-                    <label className="inline-flex items-center space-x-2 mt-2">
-                      <input
-                        type="checkbox"
-                        checked={showClinCheckbox}
-                        onChange={(e) => {
-                          setShowClinCheckbox(e.target.checked);
-                          if (!e.target.checked) {
-                            clearFile('clinical');
-                          }
-                        }}
-                        className="form-checkbox h-5 w-5 text-indigo-600"
-                      />
-                      <span className="text-sm text-gray-700">Include clinical image</span>
-                    </label>
-                  )}
-                  {/* Submit Bar below uploads */}
-                  <div className="flex flex-col gap-2 pt-4">
-                    <div className="text-xs text-gray-400">
-                      <p>Ensure images are high-resolution and focused.</p>
-                    </div>
-                    {userType === 'personal' && (
-                      <p className="text-xs text-red-500 font-medium">
-                        Please consult a medical professional after use.
-                      </p>
+        <div className="flex-1 overflow-y-auto">
+          {activeTab === 'analysis' ? (
+            <div className="max-w-6xl mx-auto">
+              <div className="p-8">
+                <div className="flex flex-row gap-8 items-start">
+                  {/* Left side: Uploads and button */}
+                  <div className="flex flex-col w-full max-w-md gap-4">
+                    <ImageUploader
+                      dermFile={dermFile}
+                      dermPreview={dermPreview}
+                      clinFile={clinFile}
+                      clinPreview={clinPreview}
+                      handleFileChange={handleFileChange}
+                      clearFile={clearFile}
+                      showClinical={showClinCheckbox && userType !== 'personal'}
+                    />
+                    {/* checkbox only visible after a dermoscopic file is selected and not in personal mode */}
+                    {dermFile && userType !== 'personal' && (
+                      <label className="inline-flex items-center space-x-2 mt-2">
+                        <input
+                          type="checkbox"
+                          checked={showClinCheckbox}
+                          onChange={(e) => {
+                            setShowClinCheckbox(e.target.checked);
+                            if (!e.target.checked) {
+                              clearFile('clinical');
+                            }
+                          }}
+                          className="form-checkbox h-5 w-5 text-indigo-600"
+                        />
+                        <span className="text-sm text-gray-700">Include clinical image</span>
+                      </label>
                     )}
-                    <button
-                      onClick={handleSubmit}
-                      disabled={loading || !dermFile}
-                      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-md transition-all
+                    {/* Submit Bar below uploads */}
+                    <div className="flex flex-col gap-2 pt-4">
+                      <div className="text-xs text-gray-400">
+                        <p>Ensure images are high-resolution and focused.</p>
+                      </div>
+                      {userType === 'personal' && (
+                        <p className="text-xs text-red-500 font-medium">
+                          Please consult a medical professional after use.
+                        </p>
+                      )}
+                      <button
+                        onClick={handleSubmit}
+                        disabled={loading || !dermFile}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-md transition-all
                                 ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-lg active:scale-95'}`}
-                    >
-                      {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
-                      {loading ? 'Processing...' : 'Run Diagnostics'}
-                    </button>
-                    {error && (
-                      <div className="p-2 mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg animate-fade-in flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" /> {error}
+                      >
+                        {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
+                        {loading ? 'Processing...' : 'Run Diagnostics'}
+                      </button>
+                      {error && (
+                        <div className="p-2 mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg animate-fade-in flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" /> {error}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                  {/* Right side: Reference (before results) + Diagnosis Result */}
+                  <div className="flex-1 flex flex-col items-center justify-start gap-4">
+                    {/* Dermoscopic examples — hidden after results arrive */}
+                    {!result && (
+                      <div className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                        <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Dermoscopic Examples</p>
+                        <img
+                          src="/sample_dermoscopic.webp"
+                          alt="Dermoscopic examples — (a)(b) benign, (c)(d) malignant"
+                          className="w-full rounded-lg object-contain max-h-28"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">(a)(b) benign · (c)(d) malignant</p>
                       </div>
                     )}
+                    <DiagnosisResult result={result} location={location} userType={userType} />
                   </div>
-                </div>
-                {/* Right side: Diagnosis Result */}
-                <div className="flex-1 flex flex-col items-center justify-start">
-                  <DiagnosisResult result={result} location={location} />
                 </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="max-w-6xl mx-auto p-8">
-            <SecondOpinion
-              onViewHistory={() => handleOpenHistory({
-                location,
-                diagnosis,
-                ageGroup,
-                sex,
-                skinTone,
-              })}
-              questionMetadata={{
-                location,
-                diagnosis,
-                ageGroup,
-                sex,
-                skinTone,
-              }}
-              doctorProfile={doctorProfile}
-            />
-          </div>
-        )}
+          ) : (
+            <div className="max-w-6xl mx-auto p-8">
+              <SecondOpinion
+                onViewHistory={() => handleOpenHistory({
+                  location,
+                  diagnosis,
+                  ageGroup,
+                  sex,
+                  skinTone,
+                })}
+                questionMetadata={{
+                  location,
+                  diagnosis,
+                  ageGroup,
+                  sex,
+                  skinTone,
+                }}
+                doctorProfile={doctorProfile}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Patient History Modal */}
         {showPatientHistory && (

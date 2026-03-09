@@ -113,8 +113,11 @@ def interpret_prediction(probs):
         else:
             benign_sum += probs[i]
             
+    top_class_idx = np.argmax(probs)
+    top_class_name = CLASS_NAMES[top_class_idx]
+            
     # Return as percentage (0-100)
-    if malignant_sum > benign_sum:
+    if (top_class_name in MALIGNANT_CLASSES) or (malignant_sum > benign_sum):
         return "Malignant (Risk)", malignant_sum * 100
     else:
         return "Benign", benign_sum * 100

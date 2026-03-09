@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function Login({ userType, onLoginSuccess, onBack }) {
+export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess }) {
   // fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -109,6 +109,17 @@ export default function Login({ userType, onLoginSuccess, onBack }) {
             </button>
           </div>
         </form>
+
+        {/* Guest access option */}
+        <div className="mt-4 pt-4 border-t border-gray-200 text-center">
+          <button
+            type="button"
+            onClick={onGuestAccess}
+            className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline font-medium"
+          >
+            Continue as Guest
+          </button>
+        </div>
       </div>
     </div>
   );
