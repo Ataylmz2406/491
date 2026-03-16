@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertCircle, CheckCircle, Info, Clipboard } from 'lucide-react';
 
-export default function DiagnosisResult({ result, location, userType }) {
+export default function DiagnosisResult({ result, location, userType, loading, showToast }) {
     // ...existing code...
     // Mapping from abbreviation to full name
     const CLASS_NAME_MAP = {
@@ -31,7 +31,11 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
     `.trim();
 
         navigator.clipboard.writeText(note);
-        alert("Clinical Note copied to clipboard.");
+        if (showToast) {
+            showToast("Clinical Note copied to clipboard.");
+        } else {
+            alert("Clinical Note copied to clipboard.");
+        }
     };
 
     const getResultColor = (pred) => {
@@ -57,8 +61,18 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
         <div className="mt-2 overflow-hidden bg-white border border-gray-200 shadow-xl rounded-2xl animate-fade-in">
             <div className="p-4">
                 <h3 className="mb-3 text-lg font-bold text-gray-900">Diagnosis Result</h3>
-                {result ? (
-                    <>
+                
+                {loading ? (
+                    <div className="space-y-4 animate-fade-in-up">
+                        <div className="h-20 rounded-xl skeleton" />
+                        <div className="flex gap-4">
+                            <div className="h-12 w-full rounded-lg skeleton" />
+                            <div className="h-12 w-1/3 rounded-lg skeleton" />
+                        </div>
+                        <div className="h-48 rounded-lg skeleton mt-4" />
+                    </div>
+                ) : result ? (
+                    <div aria-live="polite">
                         {/* Unified Prediction Display */}
                         <div className={`p-4 mb-3 rounded-xl border ${getResultColor(result.prediction)} flex items-center gap-4`}>
                             {result.prediction.toLowerCase().includes('malignant')
@@ -113,57 +127,34 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                     </div>
                                 </div>
                             ) : (
-                                /* Grouped tables for non-doctors */
-                                <div className="mb-6 space-y-4">
-                                    {/* Malignant group */}
-                                    <div>
-                                        <div className="text-sm font-bold uppercase text-red-600 mb-1 flex items-center gap-1">
-                                            <AlertCircle className="w-3.5 h-3.5" /> Malignant Risk Classes
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="min-w-full text-sm text-left border border-red-200 rounded-lg">
-                                                <thead>
-                                                    <tr className="bg-red-50">
-                                                        <th className="px-3 py-2 font-semibold">Class</th>
-                                                        <th className="px-3 py-2 font-semibold">Probability (%)</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {malignantPreds.map((pred) => (
-                                                        <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-red-50 font-bold' : ''}>
-                                                            <td className="px-3 py-2">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
-                                                            <td className="px-3 py-2">{pred.prob.toFixed(2)}%</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    {/* Benign group */}
-                                    <div>
-                                        <div className="text-sm font-bold uppercase text-green-600 mb-1 flex items-center gap-1">
-                                            <CheckCircle className="w-3.5 h-3.5" /> Benign Classes
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="min-w-full text-sm text-left border border-green-200 rounded-lg">
-                                                <thead>
-                                                    <tr className="bg-green-50">
-                                                        <th className="px-3 py-2 font-semibold">Class</th>
-                                                        <th className="px-3 py-2 font-semibold">Probability (%)</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {benignPreds.map((pred) => (
-                                                        <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-green-50 font-bold' : ''}>
-                                                            <td className="px-3 py-2">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
-                                                            <td className="px-3 py-2">{pred.prob.toFixed(2)}%</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
+                                /* Single table with colored grouping for non-doctors */
+                                <div className="mb-4">
+                                    <table className="w-full text-sm text-left border rounded-lg">
+                                        <thead>
+                                            <tr className="bg-gray-100">
+                                                <th className="px-3 py-1.5 font-semibold">Class</th>
+                                                <th className="px-3 py-1.5 font-semibold text-right">Probability (%)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {/* Malignant section */}
+                                            <tr><td colSpan="2" className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold uppercase"><AlertCircle className="w-3 h-3 inline mr-1 -mt-0.5" />Malignant</td></tr>
+                                            {malignantPreds.map((pred) => (
+                                                <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-red-50 font-bold' : ''}>
+                                                    <td className="px-3 py-1.5">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
+                                                    <td className="px-3 py-1.5 text-right">{pred.prob.toFixed(2)}%</td>
+                                                </tr>
+                                            ))}
+                                            {/* Benign section */}
+                                            <tr><td colSpan="2" className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold uppercase"><CheckCircle className="w-3 h-3 inline mr-1 -mt-0.5" />Benign</td></tr>
+                                            {benignPreds.map((pred) => (
+                                                <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-green-50 font-bold' : ''}>
+                                                    <td className="px-3 py-1.5">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
+                                                    <td className="px-3 py-1.5 text-right">{pred.prob.toFixed(2)}%</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             )
                         )}
@@ -178,7 +169,7 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                 </div>
                             </div>
                         )}
-                    </>
+                    </div>
                 ) : (
                     <p className="text-gray-400">No result yet. Upload images and run diagnosis.</p>
                 )}

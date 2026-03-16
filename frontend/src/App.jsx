@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, AlertCircle } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import ImageUploader from './components/ImageUploader';
 import DiagnosisResult from './components/DiagnosisResult';
@@ -42,6 +42,13 @@ function App() {
   const [activeTab, setActiveTab] = useState('analysis'); // or 'secondOpinion'
   const [secondOpinionSubTab, setSecondOpinionSubTab] = useState('ask'); // 'ask' or 'feed'
   const [selectedTab, setSelectedTab] = useState('analysis'); // 'analysis', 'ask', 'feed'
+
+  // --- Toast ---
+  const [toast, setToast] = useState(null);
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // doctor profile info pulled from login
   const [doctorProfile, setDoctorProfile] = useState({ name: '', info: '' });
@@ -178,21 +185,34 @@ function App() {
   // if landing page should be shown, render that instead of the app UI
   if (showLanding) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center space-y-6 bg-gray-50">
-        <h1 className="text-4xl font-bold">Welcome to the Skin Diagnostics Portal</h1>
-        <p className="text-lg text-gray-600">Please choose an option to continue:</p>
-        <div className="flex flex-col sm:flex-row gap-4">
+      <div className="h-screen flex flex-col items-center justify-center bg-gradient-to-br from-surface-darker via-surface-dark to-brand-900 text-white p-6">
+        <div className="flex items-center gap-3 mb-4 animate-fade-in-up">
+          <Activity className="w-12 h-12 text-brand-400" />
+          <h1 className="text-5xl font-bold tracking-tight">SUDerm</h1>
+        </div>
+        <p className="text-xl text-slate-300 mb-2 font-medium animate-fade-in-up" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
+          Professional AI Skin Diagnostics
+        </p>
+        <p className="text-base text-slate-400 mb-12 max-w-md text-center animate-fade-in-up" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
+          Upload dermoscopic imagery for instant, AI-powered lesion classification
+          powered by Dual-Branch EfficientNetV2.
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-4xl justify-center animate-fade-in-up" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
           {[
-            { label: 'For Doctors', type: 'doctor' },
-            { label: 'For Researchers', type: 'researcher' },
-            { label: 'For Personal Use', type: 'personal' }
-          ].map(({ label, type }) => (
+            { label: 'For Doctors', type: 'doctor', desc: 'Secure clinical workflow & metadata' },
+            { label: 'For Researchers', type: 'researcher', desc: 'Model benchmarking & batch analysis' },
+            { label: 'Personal Use', type: 'personal', desc: 'Quick exploratory screening' }
+          ].map(({ label, type, desc }) => (
             <button
-              key={label}
+              key={type}
               onClick={() => handleUserTypeChoice(type)}
-              className="px-8 py-4 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
+              className="group flex flex-col items-center text-center p-6 sm:px-8 sm:py-6 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl hover:bg-brand-500/20 hover:border-brand-400/40 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-brand-500 hover:scale-[1.03] hover:shadow-2xl flex-1 max-w-sm"
             >
-              {label}
+              <span className="block text-xl font-semibold mb-2">{label}</span>
+              <span className="block text-sm text-slate-400 group-hover:text-brand-300 transition-colors">
+                {desc}
+              </span>
             </button>
           ))}
         </div>
@@ -265,23 +285,21 @@ function App() {
               )}
               {/* tab switcher for doctors */}
               {userType === 'doctor' && (
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                   <button
-                    className={`px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-700`}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'analysis' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     onClick={() => setSelectedTab('analysis')}
                   >
                     Analysis
                   </button>
-                  <div className="flex items-center space-x-2">
-                    <select
-                      value={secondOpinionSubTab}
-                      onChange={(e) => setSelectedTab(e.target.value)}
-                      className="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 text-white border-none focus:outline-none w-auto min-w-0 hover:bg-teal-700"
-                    >
-                      <option value="ask">Ask for a second opinion</option>
-                      <option value="feed">Help other doctors</option>
-                    </select>
-                  </div>
+                  <select
+                    value={selectedTab !== 'analysis' ? selectedTab : 'ask'}
+                    onChange={(e) => setSelectedTab(e.target.value)}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors outline-none cursor-pointer border-none ${selectedTab !== 'analysis' ? 'bg-white text-gray-900 shadow-sm' : 'bg-transparent text-gray-500 hover:text-gray-700'}`}
+                  >
+                    <option value="ask">Ask for a second opinion</option>
+                    <option value="feed">Help other doctors</option>
+                  </select>
                 </div>
               )}
               <select
@@ -293,7 +311,7 @@ function App() {
                   setLoggedIn(false);
                   setShowLogin(true);
                 }}
-                className="text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none"
+                className="text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-shadow transition-colors"
                 aria-label="Switch user mode"
               >
                 <option value="doctor">For Doctors</option>
@@ -322,8 +340,9 @@ function App() {
                     />
                     {/* checkbox only visible after a dermoscopic file is selected and not in personal mode */}
                     {dermFile && userType !== 'personal' && (
-                      <label className="inline-flex items-center space-x-2 mt-2">
+                      <label htmlFor="include-clinical-checkbox" className="inline-flex items-center space-x-2 mt-2 cursor-pointer group">
                         <input
+                          id="include-clinical-checkbox"
                           type="checkbox"
                           checked={showClinCheckbox}
                           onChange={(e) => {
@@ -332,9 +351,9 @@ function App() {
                               clearFile('clinical');
                             }
                           }}
-                          className="form-checkbox h-5 w-5 text-indigo-600"
+                          className="form-checkbox h-5 w-5 text-brand-600 focus:ring-2 focus:ring-brand-500"
                         />
-                        <span className="text-sm text-gray-700">Include clinical image</span>
+                        <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Include clinical image</span>
                       </label>
                     )}
                     {/* Submit Bar below uploads */}
@@ -350,8 +369,8 @@ function App() {
                       <button
                         onClick={handleSubmit}
                         disabled={loading || !dermFile}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-md transition-all
-                                ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-lg active:scale-95'}`}
+                        className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-white shadow-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2
+                                ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700 hover:shadow-lg active:scale-[0.98] focus:ring-brand-500'}`}
                       >
                         {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
                         {loading ? 'Processing...' : 'Run Diagnostics'}
@@ -367,18 +386,18 @@ function App() {
                   {/* Right side: Reference (before results) + Diagnosis Result */}
                   <div className="flex-1 flex flex-col items-center justify-start gap-4">
                     {/* Dermoscopic examples — hidden after results arrive */}
-                    {!result && (
-                      <div className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl">
-                        <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Dermoscopic Examples</p>
+                    {!result && !loading && (
+                      <div className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl animate-fade-in-up">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Dermoscopic Examples</p>
                         <img
                           src="/sample_dermoscopic.webp"
                           alt="Dermoscopic examples — (a)(b) benign, (c)(d) malignant"
-                          className="w-full rounded-lg object-contain max-h-28"
+                          className="w-full rounded-lg object-contain opacity-90 hover:opacity-100 transition-opacity"
                         />
-                        <p className="text-[10px] text-gray-400 mt-1">(a)(b) benign · (c)(d) malignant</p>
+                        <p className="text-[11px] text-gray-400 mt-2 text-center">(a)(b) benign · (c)(d) malignant</p>
                       </div>
                     )}
-                    <DiagnosisResult result={result} location={location} userType={userType} />
+                    <DiagnosisResult result={result} location={location} userType={userType} loading={loading} showToast={showToast} />
                   </div>
                 </div>
               </div>
@@ -412,16 +431,16 @@ function App() {
 
         {/* Patient History Modal */}
         {showPatientHistory && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 modal-backdrop">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto modal-panel">
               <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">
                 <h3 className="text-lg font-bold text-gray-900">Patient History</h3>
                 <button
                   onClick={() => setShowPatientHistory(false)}
-                  className="text-gray-400 hover:text-gray-600 text-2xl font-light"
+                  className="w-10 h-10 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-700 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
                   aria-label="Close modal"
                 >
-                  ×
+                  <span className="text-2xl leading-none">&times;</span>
                 </button>
               </div>
               <PatientHistory userType={userType} questionMetadata={modalQuestionMetadata} />
@@ -429,6 +448,14 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Global Toast Component */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-6 py-4 rounded-xl shadow-2xl text-sm font-medium z-50 flex items-center gap-3 toast-enter">
+          <CheckCircle className="w-5 h-5 text-brand-400" />
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

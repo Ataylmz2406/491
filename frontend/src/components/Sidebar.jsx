@@ -51,13 +51,14 @@ export default function Sidebar({
                 <div className="space-y-5">
                     {/* Location */}
                     <div>
-                        <label className="flex items-center gap-2 mb-1 text-sm font-medium text-slate-300">
+                        <label htmlFor="location-select" className="flex items-center gap-2 mb-1 text-sm font-medium text-slate-300">
                             <MapPin className="w-4 h-4" /> Lesion Location
                         </label>
                         <select
+                            id="location-select"
                             value={location}
                             onChange={(e) => setLocation(e.target.value)}
-                            className="w-full px-3 py-2 text-sm text-white transition-colors bg-slate-800 border border-slate-700 rounded-md focus:border-teal-500 focus:outline-none"
+                            className="w-full px-3 py-2 text-sm text-white transition-colors bg-slate-800 border border-slate-700 rounded-md focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none"
                         >
                             <option value="">Select Site...</option>
                             {UNIFIED_LOCATIONS.map((loc) => (
@@ -68,11 +69,12 @@ export default function Sidebar({
 
                     {/* Demographics: Age / Sex / Skin tone */}
                     <div>
-                        <label className="flex items-center gap-2 mb-1 text-sm font-medium text-slate-300">Age Group</label>
+                        <label htmlFor="age-group-select" className="flex items-center gap-2 mb-1 text-sm font-medium text-slate-300">Age Group</label>
                         <select
+                            id="age-group-select"
                             value={ageGroup || ''}
                             onChange={(e) => setAgeGroup && setAgeGroup(e.target.value)}
-                            className="w-full px-3 py-2 text-sm text-white transition-colors bg-slate-800 border border-slate-700 rounded-md focus:border-teal-500 focus:outline-none"
+                            className="w-full px-3 py-2 text-sm text-white transition-colors bg-slate-800 border border-slate-700 rounded-md focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none"
                         >
                             <option value="">Prefer not to disclose</option>
                             {AGE_GROUPS.map((g) => (
@@ -82,11 +84,12 @@ export default function Sidebar({
                     </div>
 
                     <div>
-                        <label className="flex items-center gap-2 mb-1 text-sm font-medium text-slate-300">Sex</label>
+                        <label htmlFor="sex-select" className="flex items-center gap-2 mb-1 text-sm font-medium text-slate-300">Sex</label>
                         <select
+                            id="sex-select"
                             value={sex || ''}
                             onChange={(e) => setSex && setSex(e.target.value)}
-                            className="w-full px-3 py-2 text-sm text-white transition-colors bg-slate-800 border border-slate-700 rounded-md focus:border-teal-500 focus:outline-none"
+                            className="w-full px-3 py-2 text-sm text-white transition-colors bg-slate-800 border border-slate-700 rounded-md focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none"
                         >
                             <option value="">Prefer not to disclose</option>
                             {SEX_OPTIONS.map((s) => (
@@ -96,11 +99,12 @@ export default function Sidebar({
                     </div>
 
                     <div>
-                        <label className="flex items-center gap-2 mb-1 text-sm font-medium text-slate-300">Skin Tone</label>
+                        <label htmlFor="skin-tone-select" className="flex items-center gap-2 mb-1 text-sm font-medium text-slate-300">Skin Tone</label>
                         <select
+                            id="skin-tone-select"
                             value={skinTone || ''}
                             onChange={(e) => setSkinTone && setSkinTone(e.target.value)}
-                            className="w-full px-3 py-2 text-sm text-white transition-colors bg-slate-800 border border-slate-700 rounded-md focus:border-teal-500 focus:outline-none"
+                            className="w-full px-3 py-2 text-sm text-white transition-colors bg-slate-800 border border-slate-700 rounded-md focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none"
                         >
                             <option value="">Prefer not to disclose</option>
                             {SKIN_TONES.map((t) => (
@@ -113,14 +117,15 @@ export default function Sidebar({
                     {showGroundTruth && (
                       <>
                         <div>
-                            <label className="flex items-center gap-2 mb-1 text-sm font-medium text-slate-300">
+                            <label htmlFor="diagnosis-select" className="flex items-center gap-2 mb-1 text-sm font-medium text-slate-300">
                                 <FileText className="w-4 h-4" /> Ground Truth
                             </label>
                             <select
+                                id="diagnosis-select"
                                 value={diagnosis}
                                 onChange={(e) => setDiagnosis(e.target.value)}
                                 disabled={imageNotApplicable}
-                                className={`w-full px-3 py-2 text-sm text-white transition-colors bg-slate-800 border border-slate-700 rounded-md focus:border-teal-500 focus:outline-none ${imageNotApplicable ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full px-3 py-2 text-sm text-white transition-colors bg-slate-800 border border-slate-700 rounded-md focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none ${imageNotApplicable ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 <option value="">Unknown / None</option>
                                 <option value="MEL">Melanoma (MEL)</option>
@@ -139,8 +144,9 @@ export default function Sidebar({
 
                         {/* Image Not Applicable Checkbox */}
                         <div className="mt-2">
-                            <label className="flex items-center gap-3 cursor-pointer group">
+                            <label htmlFor="image-not-applicable" className="flex items-center gap-3 cursor-pointer group">
                                 <input
+                                    id="image-not-applicable"
                                     type="checkbox"
                                     checked={imageNotApplicable}
                                     onChange={(e) => {

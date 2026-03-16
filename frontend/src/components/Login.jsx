@@ -25,9 +25,9 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
   };
 
   return (
-    <div className="h-screen flex flex-col items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md bg-white shadow-md rounded-lg p-6">
-        <h2 className="text-2xl font-semibold mb-4 text-center">
+    <div className="h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-brand-50">
+      <div className="w-full max-w-md bg-white shadow-xl rounded-2xl p-8 border border-gray-100">
+        <h2 className="text-2xl font-semibold mb-6 text-center text-slate-800">
           {userType === 'doctor' && 'Doctor Login'}
           {userType === 'researcher' && 'Researcher Login'}
           {userType === 'personal' && 'Personal Use Login'}
@@ -41,7 +41,7 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
                   type="text"
                   value={hospital}
                   onChange={(e) => setHospital(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border rounded-md"
+                  className="mt-1 block w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors outline-none"
                   required
                 />
               </div>
@@ -51,7 +51,7 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
                   type="text"
                   value={doctorId}
                   onChange={(e) => setDoctorId(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border rounded-md"
+                  className="mt-1 block w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors outline-none"
                   required
                 />
               </div>
@@ -76,7 +76,7 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border rounded-md"
+                  className="mt-1 block w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors outline-none"
                   required
                 />
               </div>
@@ -93,17 +93,17 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
             </>
           )}
 
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center pt-2">
             <button
               type="button"
               onClick={onBack}
-              className="text-sm text-gray-600 hover:underline"
+              className="text-sm text-gray-500 hover:text-gray-800 transition-colors px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
-              &#8592; Back
+              &larr; Back
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+              className="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
             >
               Log In
             </button>
@@ -111,11 +111,11 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
         </form>
 
         {/* Guest access option */}
-        <div className="mt-4 pt-4 border-t border-gray-200 text-center">
+        <div className="mt-6 pt-6 border-t border-gray-100 text-center">
           <button
             type="button"
             onClick={onGuestAccess}
-            className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline font-medium"
+            className="text-sm text-brand-600 hover:text-brand-800 font-medium transition-colors px-4 py-2 rounded-lg hover:bg-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-200"
           >
             Continue as Guest
           </button>
