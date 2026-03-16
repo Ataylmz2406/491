@@ -267,7 +267,7 @@ function App() {
               {userType === 'doctor' && (
                 <div className="flex items-center space-x-2">
                   <button
-                    className={`px-4 py-2 rounded-lg text-sm font-medium ${selectedTab === 'analysis' ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-gray-100 text-gray-700'}`}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-700`}
                     onClick={() => setSelectedTab('analysis')}
                   >
                     Analysis
