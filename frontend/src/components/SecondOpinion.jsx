@@ -49,7 +49,23 @@ export default function SecondOpinion({ onViewHistory, questionMetadata, doctorP
   };
 
   const postOpinion = (postId) => {
-    setPosts((prev) => prev.map(post => post.id === postId ? { ...post, posted: true } : post));
+    setPosts((prev) => prev.map((post) => {
+      if (post.id !== postId) return post;
+
+      const metadataParts = [];
+      if (questionMetadata?.location) metadataParts.push(`Location: ${questionMetadata.location}`);
+      if (questionMetadata?.diagnosis) metadataParts.push(`Diagnosis: ${questionMetadata.diagnosis}`);
+      if (questionMetadata?.ageGroup) metadataParts.push(`Age Group: ${questionMetadata.ageGroup}`);
+      if (questionMetadata?.sex) metadataParts.push(`Sex: ${questionMetadata.sex}`);
+      if (questionMetadata?.skinTone) metadataParts.push(`Skin Tone: ${questionMetadata.skinTone}`);
+      if (patientId) metadataParts.push(`Patient ID: ${patientId}`);
+      if (currentHypothesis) metadataParts.push(`Hypothesis: ${currentHypothesis}`);
+
+      const metadataText = metadataParts.join(' | ');
+      const newCaption = [post.caption, metadataText].filter(Boolean).join('\n\n');
+
+      return { ...post, posted: true, caption: newCaption };
+    }));
   };
 
   const viewHistory = () => {
