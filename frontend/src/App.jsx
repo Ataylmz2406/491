@@ -5,6 +5,7 @@ import ImageUploader from './components/ImageUploader';
 import DiagnosisResult from './components/DiagnosisResult';
 import PatientHistory from './components/PatientHistory';
 import SecondOpinion from './components/SecondOpinion';
+import SecondOpinionFeed from './components/SecondOpinionFeed';
 import Login from './components/Login';
 
 function App() {
@@ -39,25 +40,33 @@ function App() {
   const [showPatientHistory, setShowPatientHistory] = useState(false);
   const [modalQuestionMetadata, setModalQuestionMetadata] = useState(null);
   const [activeTab, setActiveTab] = useState('analysis'); // or 'secondOpinion'
+  const [secondOpinionSubTab, setSecondOpinionSubTab] = useState('ask'); // 'ask' or 'feed'
+  const [selectedTab, setSelectedTab] = useState('analysis'); // 'analysis', 'ask', 'feed'
 
   // doctor profile info pulled from login
   const [doctorProfile, setDoctorProfile] = useState({ name: '', info: '' });
 
   React.useEffect(() => {
+    if (selectedTab === 'analysis') {
+      setActiveTab('analysis');
+    } else if (selectedTab === 'ask') {
+      setActiveTab('secondOpinion');
+      setSecondOpinionSubTab('ask');
+    } else if (selectedTab === 'feed') {
+      setActiveTab('secondOpinion');
+      setSecondOpinionSubTab('feed');
+    }
+  }, [selectedTab]);
+
+  React.useEffect(() => {
     if (userType === 'doctor' && loggedIn) {
-      // simulate fetching the logged-in doctor's details
-      // in a real app this would hit an auth/user endpoint using loginData
       setDoctorProfile({ name: 'Dr. Alice Example', info: 'Dermatology Dept.' });
+    } else if (userType === 'doctor' && !loggedIn) {
+      setDoctorProfile({ name: 'Anonymous', info: 'Anonymous' });
     } else {
       setDoctorProfile({ name: '', info: '' });
     }
   }, [userType, loggedIn]);
-
-  React.useEffect(() => {
-    if (userType !== 'doctor') {
-      setActiveTab('analysis');
-    }
-  }, [userType]);
 
   // --- Handlers ---
   const handleUserTypeChoice = (type) => {
@@ -198,35 +207,39 @@ function App() {
 
   return (
     <div className="flex h-screen overflow-hidden font-sans text-gray-800 bg-gray-50">
-      <Sidebar
-        location={location}
-        setLocation={setLocation}
-        diagnosis={diagnosis}
-        setDiagnosis={setDiagnosis}
-        imageNotApplicable={imageNotApplicable}
-        setImageNotApplicable={setImageNotApplicable}
-        showGroundTruth={userType !== 'personal'}
-        ageGroup={ageGroup}
-        setAgeGroup={setAgeGroup}
-        sex={sex}
-        setSex={setSex}
-        skinTone={skinTone}
-        setSkinTone={setSkinTone}
-        onLogoClick={() => setActiveTab('analysis')}
-      />
+      {!(activeTab === 'secondOpinion' && secondOpinionSubTab === 'feed') && (
+        <Sidebar
+          location={location}
+          setLocation={setLocation}
+          diagnosis={diagnosis}
+          setDiagnosis={setDiagnosis}
+          imageNotApplicable={imageNotApplicable}
+          setImageNotApplicable={setImageNotApplicable}
+          showGroundTruth={userType !== 'personal'}
+          ageGroup={ageGroup}
+          setAgeGroup={setAgeGroup}
+          sex={sex}
+          setSex={setSex}
+          skinTone={skinTone}
+          setSkinTone={setSkinTone}
+          onLogoClick={() => setActiveTab('analysis')}
+        />
+      )}
 
       {/* --- Main Content Area --- */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className={`${activeTab === 'secondOpinion' && secondOpinionSubTab === 'feed' ? 'flex-1' : 'flex-1'} flex flex-col overflow-hidden`}>
         <header className="px-8 py-6 bg-white border-b border-gray-200">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold text-gray-800">
-                {activeTab === 'analysis' ? 'New Analysis Session' : 'Second Opinion'}
+                {activeTab === 'analysis' ? 'New Analysis Session' : secondOpinionSubTab === 'ask' ? 'Ask for Second Opinion' : 'Comment on Other Doctors'}
               </h2>
               <p className="text-sm text-gray-500">
                 {activeTab === 'analysis'
                   ? 'Upload imagery to initialize the Dual-Branch EfficientNetV2 model.'
-                  : 'Submit your second-opinion images and comments.'}
+                  : secondOpinionSubTab === 'ask'
+                  ? 'Submit your second-opinion images and comments.'
+                  : 'Comment on other doctors\' second opinion requests.'}
               </p>
               {loggedIn && loginData && (
                 <p className="text-xs text-gray-600 mt-1">
@@ -252,19 +265,23 @@ function App() {
               )}
               {/* tab switcher for doctors */}
               {userType === 'doctor' && (
-                <div className="flex space-x-2">
+                <div className="flex items-center space-x-2">
                   <button
-                    className={`px-4 py-2 rounded-lg text-sm font-medium ${activeTab === 'analysis' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-                    onClick={() => setActiveTab('analysis')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium ${selectedTab === 'analysis' ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-gray-100 text-gray-700'}`}
+                    onClick={() => setSelectedTab('analysis')}
                   >
                     Analysis
                   </button>
-                  <button
-                    className={`px-4 py-2 rounded-lg text-sm font-medium ${activeTab === 'secondOpinion' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-                    onClick={() => setActiveTab('secondOpinion')}
-                  >
-                    Second Opinion
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <select
+                      value={secondOpinionSubTab}
+                      onChange={(e) => setSelectedTab(e.target.value)}
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 text-white border-none focus:outline-none w-auto min-w-0 hover:bg-teal-700"
+                    >
+                      <option value="ask">Ask for a second opinion</option>
+                      <option value="feed">Help other doctors</option>
+                    </select>
+                  </div>
                 </div>
               )}
               <select
@@ -368,23 +385,27 @@ function App() {
             </div>
           ) : (
             <div className="max-w-6xl mx-auto p-8">
-              <SecondOpinion
-                onViewHistory={() => handleOpenHistory({
-                  location,
-                  diagnosis,
-                  ageGroup,
-                  sex,
-                  skinTone,
-                })}
-                questionMetadata={{
-                  location,
-                  diagnosis,
-                  ageGroup,
-                  sex,
-                  skinTone,
-                }}
-                doctorProfile={doctorProfile}
-              />
+              {secondOpinionSubTab === 'ask' ? (
+                <SecondOpinion
+                  onViewHistory={() => handleOpenHistory({
+                    location,
+                    diagnosis,
+                    ageGroup,
+                    sex,
+                    skinTone,
+                  })}
+                  questionMetadata={{
+                    location,
+                    diagnosis,
+                    ageGroup,
+                    sex,
+                    skinTone,
+                  }}
+                  doctorProfile={doctorProfile}
+                />
+              ) : (
+                <SecondOpinionFeed doctorProfile={doctorProfile} onViewHistory={handleOpenHistory} />
+              )}
             </div>
           )}
         </div>
