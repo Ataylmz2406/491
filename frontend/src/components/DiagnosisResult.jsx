@@ -73,53 +73,52 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                     </div>
                 ) : result ? (
                     <div aria-live="polite">
-                        {/* Unified Prediction Display */}
+                        {/* AI Prediction Section */}
                         <div className={`p-4 mb-3 rounded-xl border ${getResultColor(result.prediction)} flex items-center gap-4`}>
                             {result.prediction.toLowerCase().includes('malignant')
                                 ? <AlertCircle className="shrink-0 w-12 h-12" />
                                 : <CheckCircle className="shrink-0 w-12 h-12" />
                             }
-                            <div>
+                            <div className="flex-1 min-w-0">
                                 <div className="text-sm font-bold uppercase opacity-60">AI Prediction</div>
-                                <div className="text-base font-bold text-gray-800">{CLASS_NAME_MAP[result.prediction] || result.prediction}</div>
+                                <div className="text-base font-bold text-gray-800 truncate">{CLASS_NAME_MAP[result.prediction] || result.prediction}</div>
                             </div>
-                            <div className="ml-auto text-right">
+                            <div className="flex flex-col items-end" style={{minWidth: '110px'}}>
                                 <div className="text-sm font-bold uppercase opacity-60">Confidence</div>
                                 <div className="text-base font-bold text-gray-800">{result.confidence_score.toFixed(1)}%</div>
                             </div>
                         </div>
 
-                        {/* Top Differential Class (moved up) */}
-                        <div className="mb-3 flex items-center gap-4">
-                            <div>
+                        {/* Top Differential Class Section */}
+                        <div className="mb-3 flex items-center gap-4 px-4">
+                            <div className="flex-1 min-w-0">
                                 <div className="text-sm font-bold uppercase opacity-60">Top Differential Class</div>
-                                <div className="text-base font-bold text-gray-800">{CLASS_NAME_MAP[result.details?.top_class] || result.details?.top_class}</div>
+                                <div className="text-base font-bold text-gray-800 truncate">{CLASS_NAME_MAP[result.details?.top_class] || result.details?.top_class}</div>
                             </div>
-                            <div className="ml-auto text-right">
+                            <div className="flex flex-col items-end" style={{minWidth: '110px'}}>
                                 <div className="text-sm font-bold uppercase opacity-60">Probability</div>
                                 <div className="text-base font-bold text-gray-800">{result.details?.top_prob?.toFixed(2)}%</div>
                             </div>
                         </div>
 
-                        {/* Predictions Table */}
+                        {/* All Class Predictions Table */}
                         {sortedPredictions.length > 0 && (
                             userType === 'doctor' ? (
-                                /* Flat table for doctors */
-                                <div className="mb-6">
+                                <div className="mb-6 px-4">
                                     <div className="text-sm font-bold uppercase opacity-60 mb-2">All Class Predictions</div>
                                     <div className="overflow-x-auto">
                                         <table className="min-w-full text-sm text-left border rounded-lg">
                                             <thead>
                                                 <tr className="bg-gray-100">
                                                     <th className="px-3 py-2 font-semibold">Class</th>
-                                                    <th className="px-3 py-2 font-semibold">Probability (%)</th>
+                                                    <th className="px-3 py-2 font-semibold text-right" style={{minWidth: '110px'}}>Probability (%)</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {sortedPredictions.map((pred) => (
                                                     <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-green-50 font-bold' : ''}>
                                                         <td className="px-3 py-2">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
-                                                        <td className="px-3 py-2">{pred.prob.toFixed(2)}%</td>
+                                                        <td className="px-3 py-2 text-right" style={{minWidth: '110px'}}>{pred.prob.toFixed(2)}%</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -127,13 +126,12 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                     </div>
                                 </div>
                             ) : (
-                                /* Single table with colored grouping for non-doctors */
-                                <div className="mb-4">
+                                <div className="mb-4 px-4">
                                     <table className="w-full text-sm text-left border rounded-lg">
                                         <thead>
                                             <tr className="bg-gray-100">
                                                 <th className="px-3 py-1.5 font-semibold">Class</th>
-                                                <th className="px-3 py-1.5 font-semibold text-right">Probability (%)</th>
+                                                <th className="px-3 py-1.5 font-semibold text-right" style={{minWidth: '110px'}}>Probability (%)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -142,7 +140,7 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                             {malignantPreds.map((pred) => (
                                                 <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-red-50 font-bold' : ''}>
                                                     <td className="px-3 py-1.5">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
-                                                    <td className="px-3 py-1.5 text-right">{pred.prob.toFixed(2)}%</td>
+                                                    <td className="px-3 py-1.5 text-right" style={{minWidth: '110px'}}>{pred.prob.toFixed(2)}%</td>
                                                 </tr>
                                             ))}
                                             {/* Benign section */}
@@ -150,7 +148,7 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                             {benignPreds.map((pred) => (
                                                 <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-green-50 font-bold' : ''}>
                                                     <td className="px-3 py-1.5">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
-                                                    <td className="px-3 py-1.5 text-right">{pred.prob.toFixed(2)}%</td>
+                                                    <td className="px-3 py-1.5 text-right" style={{minWidth: '110px'}}>{pred.prob.toFixed(2)}%</td>
                                                 </tr>
                                             ))}
                                         </tbody>
