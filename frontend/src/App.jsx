@@ -17,8 +17,8 @@ function App() {
   const [loginData, setLoginData] = useState(null); // store credentials/misc info
 
   // --- Image State ---
-  const [dermFile, setDermFile] = useState(null);
-  const [dermPreview, setDermPreview] = useState(null);
+  const [dermFiles, setDermFiles] = useState([]);
+  const [dermPreviews, setDermPreviews] = useState([]);
   const [clinFile, setClinFile] = useState(null);
   const [clinPreview, setClinPreview] = useState(null);
 
@@ -105,8 +105,11 @@ function App() {
     if (!file) return;
     const previewUrl = URL.createObjectURL(file);
     if (type === 'dermoscopic') {
-      setDermFile(file);
-      setDermPreview(previewUrl);
+      // Add to array if less than 4 files
+      if (dermFiles.length < 4) {
+        setDermFiles([...dermFiles, file]);
+        setDermPreviews([...dermPreviews, previewUrl]);
+      }
     } else {
       setClinFile(file);
       setClinPreview(previewUrl);
@@ -114,10 +117,17 @@ function App() {
     setResult(null);
   };
 
-  const clearFile = (type) => {
+  const clearFile = (type, index = null) => {
     if (type === 'dermoscopic') {
-      setDermFile(null);
-      setDermPreview(null);
+      if (index !== null) {
+        // Remove specific image by index
+        setDermFiles(dermFiles.filter((_, i) => i !== index));
+        setDermPreviews(dermPreviews.filter((_, i) => i !== index));
+      } else {
+        // Clear all dermoscopic images
+        setDermFiles([]);
+        setDermPreviews([]);
+      }
     } else {
       setClinFile(null);
       setClinPreview(null);
@@ -126,8 +136,8 @@ function App() {
   };
 
   const handleSubmit = async () => {
-    if (!dermFile) {
-      setError("Dermoscopic image is required for analysis.");
+    if (dermFiles.length === 0) {
+      setError("At least one dermoscopic image is required for analysis.");
       return;
     }
 
@@ -137,7 +147,10 @@ function App() {
 
     try {
       const formData = new FormData();
-      formData.append('dermoscopic_image', dermFile);
+      // Append all dermoscopic images
+      dermFiles.forEach((file, index) => {
+        formData.append(`dermoscopic_image${index === 0 ? '' : '_' + (index + 1)}`, file);
+      });
       if (clinFile) formData.append('clinical_image', clinFile);
 
       // Metadata
@@ -168,14 +181,14 @@ function App() {
     }
   };
 
-  // watch dermFile to clear checkbox/clinical when removed
+  // watch dermFiles to clear checkbox/clinical when removed
   React.useEffect(() => {
-    if (!dermFile) {
+    if (dermFiles.length === 0) {
       // hide checkbox and drop any clinical image
       setShowClinCheckbox(false);
       clearFile('clinical');
     }
-  }, [dermFile]);
+  }, [dermFiles]);
 
   const handleOpenHistory = (metadata = null) => {
     setModalQuestionMetadata(metadata);
@@ -330,8 +343,8 @@ function App() {
                   {/* Left side: Uploads and button */}
                   <div className="flex flex-col w-full max-w-md gap-4">
                     <ImageUploader
-                      dermFile={dermFile}
-                      dermPreview={dermPreview}
+                      dermFiles={dermFiles}
+                      dermPreviews={dermPreviews}
                       clinFile={clinFile}
                       clinPreview={clinPreview}
                       handleFileChange={handleFileChange}
@@ -339,7 +352,7 @@ function App() {
                       showClinical={showClinCheckbox && userType !== 'personal'}
                     />
                     {/* checkbox only visible after a dermoscopic file is selected and not in personal mode */}
-                    {dermFile && userType !== 'personal' && (
+                    {dermFiles.length > 0 && userType !== 'personal' && (
                       <label htmlFor="include-clinical-checkbox" className="inline-flex items-center space-x-2 mt-2 cursor-pointer group">
                         <input
                           id="include-clinical-checkbox"
@@ -368,9 +381,9 @@ function App() {
                       )}
                       <button
                         onClick={handleSubmit}
-                        disabled={loading || !dermFile}
+                        disabled={loading || dermFiles.length === 0}
                         className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-white shadow-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2
-                                ${loading || !dermFile ? 'bg-slate-300 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700 hover:shadow-lg active:scale-[0.98] focus:ring-brand-500'}`}
+                                ${loading || dermFiles.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700 hover:shadow-lg active:scale-[0.98] focus:ring-brand-500'}`}
                       >
                         {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
                         {loading ? 'Processing...' : 'Run Diagnostics'}
