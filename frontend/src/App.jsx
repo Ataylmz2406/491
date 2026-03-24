@@ -69,7 +69,6 @@ function App() {
       newConsultation: 'New Consultation Session',
       askSecondOpinion: 'Ask for Second Opinion',
       commentDoctors: 'Comment on Other Doctors',
-      newConsultationDesc: 'Upload imagery to initialize the Dual-Branch EfficientNetV2 model.',
       askSecondOpinionDesc: 'Submit your second-opinion images and comments.',
       commentDoctorsDesc: "Comment on other doctors' second opinion requests.",
       patientHistory: 'Patient History',
@@ -101,7 +100,6 @@ function App() {
       newConsultation: 'Yeni Konsültasyon Oturumu',
       askSecondOpinion: 'İkinci Görüş İste',
       commentDoctors: 'Diğer Doktorlara Yorum Yap',
-      newConsultationDesc: 'Görüntüleri yükleyerek Dual-Branch EfficientNetV2 modelini başlatın.',
       askSecondOpinionDesc: 'İkinci görüş resimlerinizi ve yorumlarınızı gönderin.',
       commentDoctorsDesc: 'Diğer doktorların ikinci görüş taleplerine yorum yapın.',
       patientHistory: 'Hasta Geçmişi',
@@ -341,7 +339,7 @@ function App() {
               </h2>
               <p className="text-sm text-gray-500">
                 {activeTab === 'analysis'
-                  ? t.newConsultationDesc
+                  ? ''
                   : secondOpinionSubTab === 'ask'
                   ? t.askSecondOpinionDesc
                   : t.commentDoctorsDesc}
