@@ -44,7 +44,29 @@ const DUMMY_POSTS = [
   }
 ];
 
-export default function SecondOpinionFeed({ doctorProfile, onViewHistory }) {
+export default function SecondOpinionFeed({ language = 'en', doctorProfile, onViewHistory }) {
+  const texts = {
+    en: {
+      title: 'Second Opinion Feed',
+      subtitle: "Comment on other doctors' second opinion requests.",
+      patientHistory: 'Patient History',
+      comments: 'Comments',
+      addComment: 'Add Comment',
+      noComment: 'No comments yet',
+      remove: '✕'
+    },
+    tr: {
+      title: 'İkinci Görüş Akışı',
+      subtitle: 'Diğer doktorların ikinci görüş taleplerine yorum yapın.',
+      patientHistory: 'Hasta Geçmişi',
+      comments: 'Yorumlar',
+      addComment: 'Yorum Ekle',
+      noComment: 'Henüz yorum yok',
+      remove: '✕'
+    }
+  };
+  const t = texts[language] || texts.en;
+
   const [posts, setPosts] = useState(DUMMY_POSTS);
 
   const addComment = (postId, commentText) => {
@@ -80,8 +102,8 @@ export default function SecondOpinionFeed({ doctorProfile, onViewHistory }) {
 
   return (
     <div className="bg-white border border-gray-200 shadow-xl rounded-2xl p-6 flex flex-col gap-6">
-      <h2 className="text-xl font-semibold text-gray-800">Second Opinion Feed</h2>
-      <p className="text-sm text-gray-600">Comment on other doctors' second opinion requests.</p>
+      <h2 className="text-xl font-semibold text-gray-800">{t.title}</h2>
+      <p className="text-sm text-gray-600">{t.subtitle}</p>
 
       {posts.map((post) => (
         <div key={post.id} className="border p-4 rounded-lg bg-gray-50">
@@ -98,7 +120,7 @@ export default function SecondOpinionFeed({ doctorProfile, onViewHistory }) {
               className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3 py-1 transition ml-4"
               aria-label="View patient history"
             >
-              Patient History
+              {t.patientHistory}
             </button>
           </div>
 
@@ -117,10 +139,10 @@ export default function SecondOpinionFeed({ doctorProfile, onViewHistory }) {
           )}
 
           <div className="border-t pt-4">
-            <h3 className="text-lg font-medium mb-2">Comments ({post.comments.length})</h3>
+            <h3 className="text-lg font-medium mb-2">{t.comments} ({post.comments.length})</h3>
             <div className="flex gap-2 mb-4">
               <textarea
-                placeholder="Add a comment..."
+                placeholder={t.addComment}
                 className="flex-1 px-3 py-2 border rounded-md"
                 rows={2}
                 onKeyDown={(e) => {
@@ -139,7 +161,7 @@ export default function SecondOpinionFeed({ doctorProfile, onViewHistory }) {
                 }}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-md"
               >
-                Add Comment
+                {t.addComment}
               </button>
             </div>
             {post.comments.length > 0 && (

@@ -56,7 +56,43 @@ const MOCK_PATIENT = {
   ]
 };
 
-export default function PatientHistory({ userType, questionMetadata }) {
+export default function PatientHistory({ language = 'en', userType, questionMetadata }) {
+  const texts = {
+    en: {
+      patientName: 'Patient Name',
+      patientId: 'Patient ID',
+      dob: 'Date of Birth',
+      questionMetadata: 'Question Metadata',
+      location: 'Location',
+      diagnosis: 'Diagnosis',
+      ageGroup: 'Age Group',
+      sex: 'Sex',
+      skinTone: 'Skin Tone',
+      hypothesis: 'Hypothesis',
+      notSpecified: 'Not specified',
+      previousDiagnoses: 'Previous Diagnoses',
+      confidence: 'Confidence',
+      warning: 'This is mock patient data for demonstration purposes. In production, this section would display actual patient records with proper access control and encryption.'
+    },
+    tr: {
+      patientName: 'Hasta Adı',
+      patientId: 'Hasta ID',
+      dob: 'Doğum Tarihi',
+      questionMetadata: 'Soru Metaverisi',
+      location: 'Konum',
+      diagnosis: 'Teşhis',
+      ageGroup: 'Yaş Grubu',
+      sex: 'Cinsiyet',
+      skinTone: 'Cilt Tonu',
+      hypothesis: 'Hipotez',
+      notSpecified: 'Belirtilmedi',
+      previousDiagnoses: 'Önceki Teşhisler',
+      confidence: 'Güven',
+      warning: 'Bu, demo amaçlı sahte hasta verileridir. Üretimde, bu bölüm uygun erişim denetimi ve şifreleme ile gerçek hasta kayıtlarını görüntüleyecektir.'
+    }
+  };
+  const t = texts[language] || texts.en;
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'Treated':
@@ -83,30 +119,30 @@ export default function PatientHistory({ userType, questionMetadata }) {
       <div className="mb-8 pb-8 border-b border-gray-200">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Patient Name</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{t.patientName}</p>
                 <p className="text-lg font-bold text-gray-900">{MOCK_PATIENT.name}</p>
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Patient ID</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{t.patientId}</p>
                 <p className="text-lg font-bold text-gray-900">{MOCK_PATIENT.id}</p>
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Date of Birth</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{t.dob}</p>
                 <p className="text-lg font-bold text-gray-900">{new Date(MOCK_PATIENT.dateOfBirth).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
               </div>
             </div>
         </div>
       {questionMetadata && (
         <div className="mb-8 pb-8 border-b border-gray-200">
-          <h4 className="text-md font-semibold text-gray-800 mb-3">Question Metadata</h4>
+          <h4 className="text-md font-semibold text-gray-800 mb-3">{t.questionMetadata}</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700">
-            <div><span className="font-medium">Location:</span> {questionMetadata.location || '—'}</div>
-            <div><span className="font-medium">Diagnosis:</span> {questionMetadata.diagnosis || '—'}</div>
-            <div><span className="font-medium">Age Group:</span> {questionMetadata.ageGroup || '—'}</div>
-            <div><span className="font-medium">Sex:</span> {questionMetadata.sex || '—'}</div>
-            <div><span className="font-medium">Skin Tone:</span> {questionMetadata.skinTone || '—'}</div>
-            <div><span className="font-medium">Patient ID:</span> {questionMetadata.patientId || '—'}</div>
-            <div><span className="font-medium">Hypothesis:</span> {questionMetadata.currentHypothesis ? (CLASS_NAME_MAP ? CLASS_NAME_MAP[questionMetadata.currentHypothesis] || questionMetadata.currentHypothesis : questionMetadata.currentHypothesis) : 'Not specified'}</div>
+            <div><span className="font-medium">{t.location}:</span> {questionMetadata.location || '—'}</div>
+            <div><span className="font-medium">{t.diagnosis}:</span> {questionMetadata.diagnosis || '—'}</div>
+            <div><span className="font-medium">{t.ageGroup}:</span> {questionMetadata.ageGroup || '—'}</div>
+            <div><span className="font-medium">{t.sex}:</span> {questionMetadata.sex || '—'}</div>
+            <div><span className="font-medium">{t.skinTone}:</span> {questionMetadata.skinTone || '—'}</div>
+            <div><span className="font-medium">{t.patientId}:</span> {questionMetadata.patientId || '—'}</div>
+            <div><span className="font-medium">{t.hypothesis}:</span> {questionMetadata.currentHypothesis ? (CLASS_NAME_MAP ? CLASS_NAME_MAP[questionMetadata.currentHypothesis] || questionMetadata.currentHypothesis : questionMetadata.currentHypothesis) : t.notSpecified}</div>
           </div>
         </div>
       )}
@@ -115,7 +151,7 @@ export default function PatientHistory({ userType, questionMetadata }) {
       <div>
         <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
           <FileText className="w-5 h-5 text-teal-400" />
-          Previous Diagnoses ({MOCK_PATIENT.previousDiagnoses.length})
+          {t.previousDiagnoses} ({MOCK_PATIENT.previousDiagnoses.length})
         </h3>
 
         <div className="space-y-4">
@@ -143,7 +179,7 @@ export default function PatientHistory({ userType, questionMetadata }) {
                   </div>
                 </div>
                 <div className="text-right sm:text-left">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Confidence</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{t.confidence}</p>
                   <p className="text-xl font-bold text-gray-900">{dx.confidence.toFixed(1)}%</p>
                 </div>
               </div>
@@ -156,7 +192,7 @@ export default function PatientHistory({ userType, questionMetadata }) {
           <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-blue-700">
-              This is mock patient data for demonstration purposes. In production, this section would display actual patient records with proper access control and encryption.
+              {t.warning}
             </p>
           </div>
         )}

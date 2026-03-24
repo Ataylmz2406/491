@@ -1,7 +1,36 @@
 import React from 'react';
 import { AlertCircle, CheckCircle, Info, Clipboard } from 'lucide-react';
 
-export default function DiagnosisResult({ result, location, userType, loading, showToast }) {
+export default function DiagnosisResult({ language = 'en', result, location, userType, loading, showToast }) {
+    const texts = {
+      en: {
+        title: 'Diagnosis Result',
+        noResult: userType === 'personal' ? 'No result yet. Upload images to analyze my skin in personal use.' : 'No result yet. Upload images and run diagnosis.',
+        aiPrediction: 'AI Prediction',
+        confidence: 'Confidence',
+        topDifferential: 'Top Differential Class',
+        allClassPredictions: 'All Class Predictions',
+        malignant: 'Malignant',
+        probability: 'Probability',
+        benign: 'Benign',
+        opticalWarning: 'Optical Quality Warning',
+        clinicalClipboard: 'Clinical Note copied to clipboard.'
+      },
+      tr: {
+        title: 'Teşhis Sonucu',
+        noResult: userType === 'personal' ? 'Sonuç yok. Bireysel kullanımda cildimi analiz etmek için görüntü yükleyin.' : 'Henüz sonuç yok. Görüntü yükleyin ve teşhis çalıştırın.',
+        aiPrediction: 'Yapay Zeka Tahmini',
+        confidence: 'Güven',
+        topDifferential: 'En İyi Farklılaşım Sınıfı',
+        allClassPredictions: 'Tüm Sınıf Tahminleri',
+        malignant: 'Kötü Huylu',
+        benign: 'İyi Huylu',
+        opticalWarning: 'Optik Kalite Uyarısı',        probability: 'Olasılık',        clinicalClipboard: 'Klinik not panoya kopyalandı.'
+      }
+    };
+
+    const t = texts[language] || texts.en;
+
     // ...existing code...
     // Mapping from abbreviation to full name
     const CLASS_NAME_MAP = {
@@ -32,9 +61,9 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
 
         navigator.clipboard.writeText(note);
         if (showToast) {
-            showToast("Clinical Note copied to clipboard.");
+            showToast(t.clinicalClipboard);
         } else {
-            alert("Clinical Note copied to clipboard.");
+            alert(t.clinicalClipboard);
         }
     };
 
@@ -60,7 +89,7 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
     return (
         <div className="mt-2 overflow-hidden bg-white border border-gray-200 shadow-xl rounded-2xl animate-fade-in">
             <div className="p-4">
-                <h3 className="mb-3 text-lg font-bold text-gray-900">Diagnosis Result</h3>
+                <h3 className="mb-3 text-lg font-bold text-gray-900">{t.title}</h3>
                 
                 {loading ? (
                     <div className="space-y-4 animate-fade-in-up">
@@ -80,11 +109,11 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                 : <CheckCircle className="shrink-0 w-12 h-12" />
                             }
                             <div className="flex-1 min-w-0">
-                                <div className="text-sm font-bold uppercase opacity-60">AI Prediction</div>
+                                <div className="text-sm font-bold uppercase opacity-60">{t.aiPrediction}</div>
                                 <div className="text-base font-bold text-gray-800 truncate">{CLASS_NAME_MAP[result.prediction] || result.prediction}</div>
                             </div>
                             <div className="flex flex-col items-end" style={{minWidth: '110px'}}>
-                                <div className="text-sm font-bold uppercase opacity-60">Confidence</div>
+                                <div className="text-sm font-bold uppercase opacity-60">{t.confidence}</div>
                                 <div className="text-base font-bold text-gray-800">{result.confidence_score.toFixed(1)}%</div>
                             </div>
                         </div>
@@ -92,11 +121,11 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                         {/* Top Differential Class Section */}
                         <div className="mb-3 flex items-center gap-4 px-4">
                             <div className="flex-1 min-w-0">
-                                <div className="text-sm font-bold uppercase opacity-60">Top Differential Class</div>
+                                <div className="text-sm font-bold uppercase opacity-60">{t.topDifferential}</div>
                                 <div className="text-base font-bold text-gray-800 truncate">{CLASS_NAME_MAP[result.details?.top_class] || result.details?.top_class}</div>
                             </div>
                             <div className="flex flex-col items-end" style={{minWidth: '110px'}}>
-                                <div className="text-sm font-bold uppercase opacity-60">Probability</div>
+                                <div className="text-sm font-bold uppercase opacity-60">{t.probability}</div>
                                 <div className="text-base font-bold text-gray-800">{result.details?.top_prob?.toFixed(2)}%</div>
                             </div>
                         </div>
@@ -105,7 +134,7 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                         {sortedPredictions.length > 0 && (
                             userType === 'doctor' ? (
                                 <div className="mb-6 px-4">
-                                    <div className="text-sm font-bold uppercase opacity-60 mb-2">All Class Predictions</div>
+                                    <div className="text-sm font-bold uppercase opacity-60 mb-2">{t.allClassPredictions}</div>
                                     <div className="overflow-x-auto">
                                         <table className="min-w-full text-sm text-left border rounded-lg">
                                             <thead>
@@ -136,7 +165,7 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                         </thead>
                                         <tbody>
                                             {/* Malignant section */}
-                                            <tr><td colSpan="2" className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold uppercase"><AlertCircle className="w-3 h-3 inline mr-1 -mt-0.5" />Malignant</td></tr>
+                                            <tr><td colSpan="2" className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold uppercase"><AlertCircle className="w-3 h-3 inline mr-1 -mt-0.5" />{t.malignant}</td></tr>
                                             {malignantPreds.map((pred) => (
                                                 <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-red-50 font-bold' : ''}>
                                                     <td className="px-3 py-1.5">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
@@ -144,7 +173,7 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                                 </tr>
                                             ))}
                                             {/* Benign section */}
-                                            <tr><td colSpan="2" className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold uppercase"><CheckCircle className="w-3 h-3 inline mr-1 -mt-0.5" />Benign</td></tr>
+                                            <tr><td colSpan="2" className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold uppercase"><CheckCircle className="w-3 h-3 inline mr-1 -mt-0.5" />{t.benign}</td></tr>
                                             {benignPreds.map((pred) => (
                                                 <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-green-50 font-bold' : ''}>
                                                     <td className="px-3 py-1.5">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
@@ -162,14 +191,14 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                             <div className="flex items-start gap-3 p-4 mt-6 border rounded-lg bg-amber-50 border-amber-200">
                                 <Info className="w-5 h-5 text-amber-600 mt-0.5" />
                                 <div className="text-sm text-amber-800">
-                                    <p className="mb-1 font-bold uppercase">Optical Quality Warning</p>
+                                    <p className="mb-1 font-bold uppercase">{t.opticalWarning}</p>
                                     {result.metadata.zoom_check}
                                 </div>
                             </div>
                         )}
                     </div>
                 ) : (
-                    <p className="text-gray-400">No result yet. Upload images and run diagnosis.</p>
+                    <p className="text-gray-400">{t.noResult}</p>
                 )}
             </div>
         </div>

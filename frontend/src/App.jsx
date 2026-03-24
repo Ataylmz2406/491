@@ -53,6 +53,78 @@ function App() {
   // doctor profile info pulled from login
   const [doctorProfile, setDoctorProfile] = useState({ name: '', info: '' });
 
+  // language toggle (en / tr)
+  const [language, setLanguage] = useState('en');
+
+  const translations = {
+    en: {
+      landingSubtitle: 'Professional AI Skin Diagnostics',
+      landingDescription: 'Upload dermoscopic imagery for instant, AI-powered lesion classification powered by Dual-Branch EfficientNetV2.',
+      forDoctors: 'For Doctors',
+      forResearchers: 'For Researchers',
+      personalUse: 'Personal Use',
+      forDoctorsDesc: 'Secure clinical workflow & metadata',
+      forResearchersDesc: 'Model benchmarking & batch analysis',
+      personalUseDesc: 'Quick exploratory screening',
+      newConsultation: 'New Consultation Session',
+      askSecondOpinion: 'Ask for Second Opinion',
+      commentDoctors: 'Comment on Other Doctors',
+      newConsultationDesc: 'Upload imagery to initialize the Dual-Branch EfficientNetV2 model.',
+      askSecondOpinionDesc: 'Submit your second-opinion images and comments.',
+      commentDoctorsDesc: "Comment on other doctors' second opinion requests.",
+      patientHistory: 'Patient History',
+      historyMetadata: 'History / Metadata',
+      checkImages: 'Ensure images are high-resolution and focused.',
+      consultProfessional: 'Please consult a medical professional after use.',
+      processing: 'Processing...',
+      runDiagnostics: 'Run Diagnostics',
+      runDiagnosticsPersonal: 'Analyze my skin',
+      dermoscopicExamples: 'Dermoscopic Examples',
+      noResult: 'No result yet. Upload images and run diagnosis.',
+      noResultPersonal: 'No result yet. Upload images to analyze my skin in personal use.',
+      labelAnalysis: 'Analysis',
+      labelAsk: 'Ask for a second opinion',
+      labelFeed: 'Help other doctors',
+      language: 'Language',
+      english: 'English',
+      turkish: 'Türkçe'
+    },
+    tr: {
+      landingSubtitle: 'Profesyonel Yapay Zeka Cilt Teşhisi',
+      landingDescription: 'Lezyon sınıflandırması için dermatoskopik görüntüler yükleyin; Çift Dallı EfficientNetV2 ile anında sonuç alın.',
+      forDoctors: 'Doktorlar için',
+      forResearchers: 'Araştırmacılar için',
+      personalUse: 'Bireysel Kullanım',
+      forDoctorsDesc: 'Güvenli klinik iş akışı ve meta veri',
+      forResearchersDesc: 'Model karşılaştırma ve toplu analiz',
+      personalUseDesc: 'Hızlı keşif taraması',
+      newConsultation: 'Yeni Konsültasyon Oturumu',
+      askSecondOpinion: 'İkinci Görüş İste',
+      commentDoctors: 'Diğer Doktorlara Yorum Yap',
+      newConsultationDesc: 'Görüntüleri yükleyerek Dual-Branch EfficientNetV2 modelini başlatın.',
+      askSecondOpinionDesc: 'İkinci görüş resimlerinizi ve yorumlarınızı gönderin.',
+      commentDoctorsDesc: 'Diğer doktorların ikinci görüş taleplerine yorum yapın.',
+      patientHistory: 'Hasta Geçmişi',
+      historyMetadata: 'Geçmiş / Metaveri',
+      checkImages: 'Görüntülerin yüksek çözünürlüklü ve odaklı olduğundan emin olun.',
+      consultProfessional: 'Kullanımdan sonra lütfen bir sağlık uzmanına danışın.',
+      processing: 'İşleniyor...',
+      runDiagnostics: 'Teşhise Başla',
+      runDiagnosticsPersonal: 'Cildimi analiz et (Bireysel Kullanım)',
+      dermoscopicExamples: 'Dermatoskopik Örnekler',
+      noResult: 'Sonuç yok. Görüntü yükleyin ve teşhis çalıştırın.',
+      noResultPersonal: 'Sonuç yok. Bireysel kullanımda cildimi analiz etmek için görüntü yükleyin.',
+      labelAnalysis: 'Analiz',
+      labelAsk: 'İkinci görüş iste',
+      labelFeed: 'Diğer doktorlara yardımcı ol',
+      language: 'Dil',
+      english: 'English',
+      turkish: 'Türkçe'
+    }
+  };
+
+  const t = translations[language];
+
   React.useEffect(() => {
     if (selectedTab === 'analysis') {
       setActiveTab('analysis');
@@ -204,18 +276,17 @@ function App() {
           <h1 className="text-5xl font-bold tracking-tight">SUDerm</h1>
         </div>
         <p className="text-xl text-slate-300 mb-2 font-medium animate-fade-in-up" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
-          Professional AI Skin Diagnostics
+          {t.landingSubtitle}
         </p>
         <p className="text-base text-slate-400 mb-12 max-w-md text-center animate-fade-in-up" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
-          Upload dermoscopic imagery for instant, AI-powered lesion classification
-          powered by Dual-Branch EfficientNetV2.
+          {t.landingDescription}
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 w-full max-w-4xl justify-center animate-fade-in-up" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
           {[
-            { label: 'For Doctors', type: 'doctor', desc: 'Secure clinical workflow & metadata' },
-            { label: 'For Researchers', type: 'researcher', desc: 'Model benchmarking & batch analysis' },
-            { label: 'Personal Use', type: 'personal', desc: 'Quick exploratory screening' }
+            { label: t.forDoctors, type: 'doctor', desc: t.forDoctorsDesc },
+            { label: t.forResearchers, type: 'researcher', desc: t.forResearchersDesc },
+            { label: t.personalUse, type: 'personal', desc: t.personalUseDesc }
           ].map(({ label, type, desc }) => (
             <button
               key={type}
@@ -235,13 +306,14 @@ function App() {
 
   // show login form if required
   if (showLogin && userType) {
-    return <Login userType={userType} onLoginSuccess={handleLoginSuccess} onBack={handleLoginBack} onGuestAccess={handleGuestAccess} />;
+    return <Login language={language} userType={userType} onLoginSuccess={handleLoginSuccess} onBack={handleLoginBack} onGuestAccess={handleGuestAccess} />;
   }
 
   return (
     <div className="flex h-screen overflow-hidden font-sans text-gray-800 bg-gray-50">
       {!(activeTab === 'secondOpinion' && secondOpinionSubTab === 'feed') && (
         <Sidebar
+          language={language}
           location={location}
           setLocation={setLocation}
           diagnosis={diagnosis}
@@ -265,14 +337,14 @@ function App() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold text-gray-800">
-                {activeTab === 'analysis' ? 'New Analysis Session' : secondOpinionSubTab === 'ask' ? 'Ask for Second Opinion' : 'Comment on Other Doctors'}
+                {activeTab === 'analysis' ? t.newConsultation : secondOpinionSubTab === 'ask' ? t.askSecondOpinion : t.commentDoctors}
               </h2>
               <p className="text-sm text-gray-500">
                 {activeTab === 'analysis'
-                  ? 'Upload imagery to initialize the Dual-Branch EfficientNetV2 model.'
+                  ? t.newConsultationDesc
                   : secondOpinionSubTab === 'ask'
-                  ? 'Submit your second-opinion images and comments.'
-                  : 'Comment on other doctors\' second opinion requests.'}
+                  ? t.askSecondOpinionDesc
+                  : t.commentDoctorsDesc}
               </p>
               {loggedIn && loginData && (
                 <p className="text-xs text-gray-600 mt-1">
@@ -287,13 +359,24 @@ function App() {
 
             {/* User mode indicator + switcher + Patient History */}
             <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <span>{t.language}:</span>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="text-sm font-medium text-gray-800 bg-white border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <option value="en">{t.english}</option>
+                  <option value="tr">{t.turkish}</option>
+                </select>
+              </label>
               {(userType === 'doctor' || userType === 'personal') && (
                 <button
                   onClick={() => handleOpenHistory()}
                   className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2 transition"
                   aria-label="View patient history"
                 >
-                  Patient History
+                  {t.patientHistory}
                 </button>
               )}
               {/* tab switcher for doctors */}
@@ -303,15 +386,15 @@ function App() {
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'analysis' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     onClick={() => setSelectedTab('analysis')}
                   >
-                    Analysis
+                    {t.labelAnalysis}
                   </button>
                   <select
                     value={selectedTab !== 'analysis' ? selectedTab : 'ask'}
                     onChange={(e) => setSelectedTab(e.target.value)}
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors outline-none cursor-pointer border-none ${selectedTab !== 'analysis' ? 'bg-white text-gray-900 shadow-sm' : 'bg-transparent text-gray-500 hover:text-gray-700'}`}
                   >
-                    <option value="ask">Ask for a second opinion</option>
-                    <option value="feed">Help other doctors</option>
+                    <option value="ask">{t.labelAsk}</option>
+                    <option value="feed">{t.labelFeed}</option>
                   </select>
                 </div>
               )}
@@ -327,9 +410,9 @@ function App() {
                 className="text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-shadow transition-colors"
                 aria-label="Switch user mode"
               >
-                <option value="doctor">For Doctors</option>
-                <option value="researcher">For Researchers</option>
-                <option value="personal">For Personal Use</option>
+                <option value="doctor">{t.forDoctors}</option>
+                <option value="researcher">{t.forResearchers}</option>
+                <option value="personal">{t.personalUse}</option>
               </select>
             </div>
           </div>
@@ -343,6 +426,7 @@ function App() {
                   {/* Left side: Uploads and button */}
                   <div className="flex flex-col w-full max-w-md gap-4">
                     <ImageUploader
+                      language={language}
                       dermFiles={dermFiles}
                       dermPreviews={dermPreviews}
                       clinFile={clinFile}
@@ -372,11 +456,11 @@ function App() {
                     {/* Submit Bar below uploads */}
                     <div className="flex flex-col gap-2 pt-4">
                       <div className="text-xs text-gray-400">
-                        <p>Ensure images are high-resolution and focused.</p>
+                        <p>{t.checkImages}</p>
                       </div>
                       {userType === 'personal' && (
                         <p className="text-xs text-red-500 font-medium">
-                          Please consult a medical professional after use.
+                          {t.consultProfessional}
                         </p>
                       )}
                       <button
@@ -386,7 +470,7 @@ function App() {
                                 ${loading || dermFiles.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700 hover:shadow-lg active:scale-[0.98] focus:ring-brand-500'}`}
                       >
                         {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
-                        {loading ? 'Processing...' : 'Run Diagnostics'}
+                        {loading ? t.processing : (userType === 'personal' ? t.runDiagnosticsPersonal : t.runDiagnostics)}
                       </button>
                       {error && (
                         <div className="p-2 mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg animate-fade-in flex items-center gap-2">
@@ -401,7 +485,7 @@ function App() {
                     {/* Dermoscopic examples — hidden after results arrive */}
                     {!result && !loading && (
                       <div className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl animate-fade-in-up">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Dermoscopic Examples</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{t.dermoscopicExamples}</p>
                         <img
                           src="/sample_dermoscopic.webp"
                           alt="Dermoscopic examples — (a)(b) benign, (c)(d) malignant"
@@ -410,7 +494,7 @@ function App() {
                         <p className="text-[11px] text-gray-400 mt-2 text-center">(a)(b) benign · (c)(d) malignant</p>
                       </div>
                     )}
-                    <DiagnosisResult result={result} location={location} userType={userType} loading={loading} showToast={showToast} />
+                    <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} />
                   </div>
                 </div>
               </div>
@@ -419,6 +503,7 @@ function App() {
             <div className="max-w-6xl mx-auto p-8">
               {secondOpinionSubTab === 'ask' ? (
                 <SecondOpinion
+                  language={language}
                   onViewHistory={() => handleOpenHistory({
                     location,
                     diagnosis,
@@ -436,7 +521,7 @@ function App() {
                   doctorProfile={doctorProfile}
                 />
               ) : (
-                <SecondOpinionFeed doctorProfile={doctorProfile} onViewHistory={handleOpenHistory} />
+                <SecondOpinionFeed language={language} doctorProfile={doctorProfile} onViewHistory={handleOpenHistory} />
               )}
             </div>
           )}
@@ -447,7 +532,7 @@ function App() {
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 modal-backdrop">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto modal-panel">
               <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-gray-900">Patient History</h3>
+                <h3 className="text-lg font-bold text-gray-900">{t.patientHistory}</h3>
                 <button
                   onClick={() => setShowPatientHistory(false)}
                   className="w-10 h-10 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-700 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -456,7 +541,7 @@ function App() {
                   <span className="text-2xl leading-none">&times;</span>
                 </button>
               </div>
-              <PatientHistory userType={userType} questionMetadata={modalQuestionMetadata} />
+              <PatientHistory language={language} userType={userType} questionMetadata={modalQuestionMetadata} />
             </div>
           </div>
         )}

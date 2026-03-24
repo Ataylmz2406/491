@@ -435,7 +435,7 @@ Top Differential: ${result?['details']?['top_class']}''';
               children: [
                 Text(
                   activeTab == 'analysis'
-                      ? 'New Analysis Session'
+                      ? 'New Consultation Session'
                       : 'Second Opinion',
                   style: const TextStyle(
                     fontSize: 24,

@@ -2,10 +2,44 @@ import React, { useState } from 'react';
 import { Camera, ImageIcon, Upload, X, ZoomIn } from 'lucide-react';
 
 export default function ImageUploader({
+    language = 'en',
     dermFiles, dermPreviews, clinFile, clinPreview, handleFileChange, clearFile,
     showClinical = true
 }) {
     const [zoomedImage, setZoomedImage] = useState(null);
+
+    const translations = {
+      en: {
+        dermoscopicHeader: 'Dermoscopic',
+        clinicalHeader: 'Clinical',
+        required: 'Required',
+        optional: 'Optional',
+        userMayUpload: 'User may upload up to four photos',
+        uploadDermoscopy: 'Upload Dermoscopy',
+        uploadDermoscopyDesc: 'High-resolution close-up (JPG, PNG) - Up to 4 photos',
+        uploadMore: (count) => `Upload more (${count}/4)`,
+        uploadClinicalView: 'Upload Clinical View',
+        clinicalDesc: 'Macro/Regional photo',
+        invalid: 'Not valid',
+        chooseImages: 'Choose images'
+      },
+      tr: {
+        dermoscopicHeader: 'Dermatoskopik',
+        clinicalHeader: 'Klinik',
+        required: 'Zorunlu',
+        optional: 'Opsiyonel',
+        userMayUpload: 'Kullanıcı en fazla dört fotoğraf yükleyebilir',
+        uploadDermoscopy: 'Dermatoskopi Yükle',
+        uploadDermoscopyDesc: 'Yüksek çözünürlüklü yakın çekim (JPG, PNG) - En fazla 4 fotoğraf',
+        uploadMore: (count) => `Daha fazla yükle (${count}/4)`,
+        uploadClinicalView: 'Klinik Görünüm Yükle',
+        clinicalDesc: 'Makro/Bölgesel fotoğraf',
+        invalid: 'Geçersiz',
+        chooseImages: 'Görüntüleri seç'
+      }
+    };
+
+    const t = translations[language] || translations.en;
 
     const getGridColsClass = () => {
         if (dermPreviews.length === 1) return 'grid-cols-1';
@@ -46,10 +80,10 @@ export default function ImageUploader({
                 <div className="flex justify-between mb-4">
                     <div className="flex flex-col gap-1">
                         <h3 className="flex items-center gap-2 font-semibold text-gray-700 text-lg">
-                            <Camera className="w-8 h-8 text-brand-600" /> Dermoscopic
-                            <span className="text-[13px] font-bold text-brand-700 bg-brand-100 px-3 py-1 rounded-full uppercase">Required</span>
+                            <Camera className="w-8 h-8 text-brand-600" /> {t.dermoscopicHeader}
+                            <span className="text-[13px] font-bold text-brand-700 bg-brand-100 px-3 py-1 rounded-full uppercase">{t.required}</span>
                         </h3>
-                        <span className="text-xs text-gray-500 ml-10">User may upload up to four photos</span>
+                        <span className="text-xs text-gray-500 ml-10">{t.userMayUpload}</span>
                     </div>
                     {dermFiles.length > 0 && <button onClick={() => clearFile('dermoscopic')}><X className="w-8 h-8 text-gray-400 hover:text-red-500" /></button>}
                 </div>
@@ -57,8 +91,8 @@ export default function ImageUploader({
                 {dermPreviews.length === 0 ? (
                     <label className="flex flex-col items-center justify-center h-56 cursor-pointer group">
                         <div className="p-4 mb-3 bg-brand-100 rounded-full group-hover:bg-brand-200 transition-colors group-hover:scale-110 duration-300"><Upload className="w-14 h-14 text-brand-600" /></div>
-                        <span className="text-lg font-medium text-brand-700 group-hover:text-brand-800 transition-colors">Upload Dermoscopy</span>
-                        <span className="text-base text-gray-400 mt-1">High-resolution close-up (JPG, PNG) - Up to 4 photos</span>
+                        <span className="text-lg font-medium text-brand-700 group-hover:text-brand-800 transition-colors">{t.uploadDermoscopy}</span>
+                        <span className="text-base text-gray-400 mt-1">{t.uploadDermoscopyDesc}</span>
                         <input 
                             type="file" 
                             className="hidden" 
@@ -107,7 +141,7 @@ export default function ImageUploader({
                                     <Upload className="w-6 h-6 text-brand-600" />
                                 </div>
                                 <span className="text-sm text-brand-700 group-hover:text-brand-800 transition-colors font-medium mt-1">
-                                    Upload more ({dermFiles.length}/4)
+                                    {t.uploadMore(dermFiles.length)}
                                 </span>
                                 <input 
                                     type="file" 
@@ -127,8 +161,8 @@ export default function ImageUploader({
               <div className={`relative p-6 transition-all duration-300 bg-white border-2 border-dashed rounded-xl ${!clinFile ? 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/30 hover:shadow-lg hover:scale-[1.01]' : 'border-indigo-600 bg-indigo-50/20 shadow-md'}`}>
                 <div className="flex justify-between mb-4">
                     <h3 className="flex items-center gap-2 font-semibold text-gray-700 text-lg">
-                        <ImageIcon className="w-8 h-8 text-indigo-600" /> Clinical
-                        <span className="text-[13px] font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full uppercase">Optional</span>
+                        <ImageIcon className="w-8 h-8 text-indigo-600" /> {t.clinicalHeader}
+                        <span className="text-[13px] font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full uppercase">{t.optional}</span>
                     </h3>
                     {clinFile && <button onClick={() => clearFile('clinical')}><X className="w-8 h-8 text-gray-400 hover:text-red-500" /></button>}
                 </div>
@@ -136,8 +170,8 @@ export default function ImageUploader({
                 {!clinPreview ? (
                     <label className="flex flex-col items-center justify-center h-56 cursor-pointer group">
                         <div className="p-4 mb-3 bg-gray-100 rounded-full group-hover:bg-indigo-100 transition-colors group-hover:scale-110 duration-300"><Upload className="w-14 h-14 text-gray-500 group-hover:text-indigo-600 transition-colors" /></div>
-                        <span className="text-lg font-medium text-gray-600 group-hover:text-indigo-700 transition-colors">Upload Clinical View</span>
-                        <span className="text-base text-gray-400 mt-1">Macro/Regional photo</span>
+                        <span className="text-lg font-medium text-gray-600 group-hover:text-indigo-700 transition-colors">{t.uploadClinicalView}</span>
+                        <span className="text-base text-gray-400 mt-1">{t.clinicalDesc}</span>
                         <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'clinical')} />
                     </label>
                 ) : (

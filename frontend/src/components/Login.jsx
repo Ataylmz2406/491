@@ -1,11 +1,40 @@
 import React, { useState } from 'react';
 
-export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess }) {
+export default function Login({ language = 'en', userType, onLoginSuccess, onBack, onGuestAccess }) {
   // fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [hospital, setHospital] = useState('');
   const [doctorId, setDoctorId] = useState('');
+
+  const translations = {
+    en: {
+      doctorLogin: 'Doctor Login',
+      researcherLogin: 'Researcher Login',
+      personalLogin: 'Personal Use Login',
+      hospitalName: 'Hospital Name',
+      doctorId: 'Doctor ID',
+      password: 'Password',
+      email: 'Email',
+      back: '← Back',
+      login: 'Log In',
+      continueAsGuest: 'Continue as Guest'
+    },
+    tr: {
+      doctorLogin: 'Doktor Girişi',
+      researcherLogin: 'Araştırmacı Girişi',
+      personalLogin: 'Bireysel Kullanım Girişi',
+      hospitalName: 'Hastane Adı',
+      doctorId: 'Doktor ID',
+      password: 'Şifre',
+      email: 'E-posta',
+      back: '← Geri',
+      login: 'Giriş Yap',
+      continueAsGuest: 'Ziyaretçi olarak devam et'
+    }
+  };
+
+  const t = translations[language] || translations.en;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -28,15 +57,15 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
     <div className="h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-brand-50">
       <div className="w-full max-w-md bg-white shadow-xl rounded-2xl p-8 border border-gray-100">
         <h2 className="text-2xl font-semibold mb-6 text-center text-slate-800">
-          {userType === 'doctor' && 'Doctor Login'}
-          {userType === 'researcher' && 'Researcher Login'}
-          {userType === 'personal' && 'Personal Use Login'}
+          {userType === 'doctor' && t.doctorLogin}
+          {userType === 'researcher' && t.researcherLogin}
+          {userType === 'personal' && t.personalLogin}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           {userType === 'doctor' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Hospital Name</label>
+                <label className="block text-sm font-medium text-gray-700">{t.hospitalName}</label>
                 <input
                   type="text"
                   value={hospital}
@@ -46,7 +75,7 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Doctor ID</label>
+                <label className="block text-sm font-medium text-gray-700">{t.doctorId}</label>
                 <input
                   type="text"
                   value={doctorId}
@@ -56,7 +85,7 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <label className="block text-sm font-medium text-gray-700">{t.password}</label>
                 <input
                   type="password"
                   value={password}
@@ -71,7 +100,7 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
           {(userType === 'researcher' || userType === 'personal') && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <label className="block text-sm font-medium text-gray-700">{t.email}</label>
                 <input
                   type="email"
                   value={email}
@@ -81,7 +110,7 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <label className="block text-sm font-medium text-gray-700">{t.password}</label>
                 <input
                   type="password"
                   value={password}
@@ -99,13 +128,13 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
               onClick={onBack}
               className="text-sm text-gray-500 hover:text-gray-800 transition-colors px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
-              &larr; Back
+              {t.back}
             </button>
             <button
               type="submit"
               className="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
             >
-              Log In
+              {t.login}
             </button>
           </div>
         </form>
@@ -117,7 +146,7 @@ export default function Login({ userType, onLoginSuccess, onBack, onGuestAccess 
             onClick={onGuestAccess}
             className="text-sm text-brand-600 hover:text-brand-800 font-medium transition-colors px-4 py-2 rounded-lg hover:bg-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-200"
           >
-            Continue as Guest
+            {t.continueAsGuest}
           </button>
         </div>
       </div>
