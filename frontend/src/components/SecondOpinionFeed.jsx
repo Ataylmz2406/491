@@ -7,8 +7,8 @@ const DUMMY_POSTS = [
     affiliation: 'General Hospital',
     caption: 'Suspected basal cell carcinoma on the nose. Looking for confirmation.\n\nLocation: Face | Diagnosis: BCC | Age Group: 50-59 | Sex: Male | Skin Tone: Fair | Patient ID: P-2024-001 | Hypothesis: BCC',
     uploads: [
-      { preview: '/sample_dermoscopic.webp' }, // placeholder
-      { preview: '/sample_dermoscopic.webp' }
+      { preview: '/src/assets/pigmented-lesion-01.jpg' }, // placeholder
+      { preview: '/src/assets/Skin-Lesions-2.jpg' }
     ],
     comments: [
       { id: 1, text: 'Agree with BCC diagnosis.', author: 'Dr. Emily Davis' },
@@ -22,7 +22,7 @@ const DUMMY_POSTS = [
     affiliation: 'Dermatology Clinic',
     caption: 'Melanoma concern on back. Urgent second opinion needed.\n\nLocation: Back | Diagnosis: MEL | Age Group: 40-49 | Sex: Female | Skin Tone: Medium | Patient ID: P-2024-002 | Hypothesis: MEL',
     uploads: [
-      { preview: '/sample_dermoscopic.webp' }
+      { preview: '/src/assets/What_Causes_Vascular_Skin_Lesions1-1080x675.png' }
     ],
     comments: [
       { id: 1, text: 'Looks malignant, recommend excision.', author: 'Dr. Robert Wilson' }
@@ -35,9 +35,9 @@ const DUMMY_POSTS = [
     affiliation: 'Skin Cancer Center',
     caption: 'Benign nevus, but monitoring advised.\n\nLocation: Arm | Diagnosis: NV | Age Group: 30-39 | Sex: Male | Skin Tone: Olive | Patient ID: P-2024-003 | Hypothesis: NV',
     uploads: [
-      { preview: '/sample_dermoscopic.webp' },
-      { preview: '/sample_dermoscopic.webp' },
-      { preview: '/sample_dermoscopic.webp' }
+      { preview: '/src/assets/pigmented-lesion-01.jpg' },
+      { preview: '/src/assets/Skin-Lesions-2.jpg' },
+      { preview: '/src/assets/What_Causes_Vascular_Skin_Lesions1-1080x675.png' }
     ],
     comments: [],
     posted: true
