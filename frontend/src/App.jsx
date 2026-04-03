@@ -492,7 +492,9 @@ function App() {
                         <p className="text-[11px] text-gray-400 mt-2 text-center">(a)(b) benign · (c)(d) malignant</p>
                       </div>
                     )}
-                    <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} />
+                    {(result || loading) && (
+                      <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} />
+                    )}
                   </div>
                 </div>
               </div>
