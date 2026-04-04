@@ -1,7 +1,8 @@
 import React from 'react';
-import { AlertCircle, CheckCircle, Info, Clipboard } from 'lucide-react';
+import { AlertCircle, CheckCircle, Info, Clipboard, FileDown } from 'lucide-react';
+import { PDFExportService } from '../services/pdfExportService';
 
-export default function DiagnosisResult({ language = 'en', result, location, userType, loading, showToast }) {
+export default function DiagnosisResult({ language = 'en', result, location, userType, loading, showToast, patientId }) {
     const texts = {
       en: {
         title: 'Diagnosis Result',
@@ -14,7 +15,9 @@ export default function DiagnosisResult({ language = 'en', result, location, use
         probability: 'Probability',
         benign: 'Benign',
         opticalWarning: 'Optical Quality Warning',
-        clinicalClipboard: 'Clinical Note copied to clipboard.'
+        clinicalClipboard: 'Clinical Note copied to clipboard.',
+        exportPDF: 'Export PDF Report',
+        pdfSuccess: 'PDF exported successfully!'
       },
       tr: {
         title: 'Teşhis Sonucu',
@@ -25,7 +28,9 @@ export default function DiagnosisResult({ language = 'en', result, location, use
         allClassPredictions: 'Tüm Sınıf Tahminleri',
         malignant: 'Kötü Huylu',
         benign: 'İyi Huylu',
-        opticalWarning: 'Optik Kalite Uyarısı',        probability: 'Olasılık',        clinicalClipboard: 'Klinik not panoya kopyalandı.'
+        opticalWarning: 'Optik Kalite Uyarısı',        probability: 'Olasılık',        clinicalClipboard: 'Klinik not panoya kopyalandı.',
+        exportPDF: 'PDF Rapor Dışa Aktar',
+        pdfSuccess: 'PDF başarıyla dışa aktarıldı!'
       }
     };
 
@@ -64,6 +69,33 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
             showToast(t.clinicalClipboard);
         } else {
             alert(t.clinicalClipboard);
+        }
+    };
+
+    const exportToPDF = async () => {
+        try {
+            const caseData = {
+                id: `case_${Date.now()}`,
+                patientId: patientId || 'Not specified',
+                aiPrediction: result.prediction,
+                confidence: result.confidence_score,
+                details: result.details,
+                lesionLocation: location,
+                savedAt: new Date().toISOString(),
+            };
+            
+            await PDFExportService.generateCaseReport(caseData, language);
+            
+            if (showToast) {
+                showToast(t.pdfSuccess);
+            }
+        } catch (error) {
+            console.error('Error exporting PDF:', error);
+            if (showToast) {
+                showToast('Error exporting PDF');
+            } else {
+                alert('Error exporting PDF');
+            }
         }
     };
 
@@ -196,6 +228,26 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                 </div>
                             </div>
                         )}
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3 mt-6 pt-4 border-t border-gray-200">
+                            <button
+                                onClick={copyClinicalNote}
+                                className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                title={t.clinicalClipboard}
+                            >
+                                <Clipboard className="w-4 h-4" />
+                                Copy Note
+                            </button>
+                            <button
+                                onClick={exportToPDF}
+                                className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors"
+                                title={t.exportPDF}
+                            >
+                                <FileDown className="w-4 h-4" />
+                                {t.exportPDF}
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <p className="text-gray-400">{t.noResult}</p>

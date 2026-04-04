@@ -1,5 +1,6 @@
-import React from 'react';
-import { FileText, Calendar, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, Calendar, AlertCircle, Search, ChevronRight } from 'lucide-react';
+import { useCaseContext } from '../context/CaseContext';
 
 const CLASS_NAME_MAP = {
   "AKIEC": "Actinic keratosis / intraepidermal carcinoma",
@@ -15,188 +16,203 @@ const CLASS_NAME_MAP = {
   "VASC": "Vascular lesions and hemorrhage"
 };
 
-// Mock patient data
-const MOCK_PATIENT = {
-  name: 'John Mitchell',
-  id: 'P-2024-001847',
-  dateOfBirth: '1968-05-15',
-  previousDiagnoses: [
-    {
-      id: 1,
-      date: '2024-02-18',
-      diagnosis: 'Melanoma (Stage I)',
-      confidence: 87.5,
-      location: 'Right shoulder',
-      status: 'Treated'
-    },
-    {
-      id: 2,
-      date: '2023-11-22',
-      diagnosis: 'Basal Cell Carcinoma',
-      confidence: 92.1,
-      location: 'Face',
-      status: 'Treated'
-    },
-    {
-      id: 3,
-      date: '2023-08-05',
-      diagnosis: 'Benign Nevus',
-      confidence: 78.3,
-      location: 'Left arm',
-      status: 'Monitoring'
-    },
-    {
-      id: 4,
-      date: '2023-04-10',
-      diagnosis: 'Seborrheic Keratosis',
-      confidence: 85.6,
-      location: 'Chest',
-      status: 'No Action'
-    }
-  ]
-};
+export default function PatientHistory({ language = 'en', userType, questionMetadata, onCaseSelect }) {
+  const { state: caseState, loadCase, searchPatientCases } = useCaseContext();
+  const [searchPatientId, setSearchPatientId] = useState('');
+  const [filteredCases, setFilteredCases] = useState([]);
+  const [hasSearched, setHasSearched] = useState(false);
 
-export default function PatientHistory({ language = 'en', userType, questionMetadata }) {
+  React.useEffect(() => {
+    if (caseState.searchResults && caseState.searchResults.length > 0) {
+      setFilteredCases(caseState.searchResults);
+    }
+  }, [caseState.searchResults]);
+
   const texts = {
     en: {
-      patientName: 'Patient Name',
-      patientId: 'Patient ID',
-      dob: 'Date of Birth',
-      questionMetadata: 'Question Metadata',
-      location: 'Location',
-      diagnosis: 'Diagnosis',
-      ageGroup: 'Age Group',
-      sex: 'Sex',
-      skinTone: 'Skin Tone',
-      hypothesis: 'Hypothesis',
-      notSpecified: 'Not specified',
+      searchPatient: 'Search Patient Cases',
+      patientIdLabel: 'Enter Patient ID...',
+      search: 'Search',
+      noCases: 'No cases found',
+      noPreviousCases: 'No previous cases for this patient',
       previousDiagnoses: 'Previous Diagnoses',
+      casesFound: 'cases found',
+      location: 'Location',
+      date: 'Date',
+      diagnosis: 'Diagnosis',
       confidence: 'Confidence',
-      warning: 'This is mock patient data for demonstration purposes. In production, this section would display actual patient records with proper access control and encryption.'
+      doctorNotes: 'Doctor Notes',
+      status: 'Status',
+      treated: 'Treated',
+      monitoring: 'Monitoring',
+      noAction: 'No Action',
+      loading: 'Loading...'
     },
     tr: {
-      patientName: 'Hasta Adı',
-      patientId: 'Hasta ID',
-      dob: 'Doğum Tarihi',
-      questionMetadata: 'Soru Metaverisi',
-      location: 'Konum',
-      diagnosis: 'Teşhis',
-      ageGroup: 'Yaş Grubu',
-      sex: 'Cinsiyet',
-      skinTone: 'Cilt Tonu',
-      hypothesis: 'Hipotez',
-      notSpecified: 'Belirtilmedi',
+      searchPatient: 'Hasta Vakalarını Ara',
+      patientIdLabel: 'Hasta ID\'sini girin...',
+      search: 'Ara',
+      noCases: 'Vaka bulunamadı',
+      noPreviousCases: 'Bu hasta için önceki vaka yok',
       previousDiagnoses: 'Önceki Teşhisler',
+      casesFound: 'vaka bulundu',
+      location: 'Konum',
+      date: 'Tarih',
+      diagnosis: 'Teşhis',
       confidence: 'Güven',
-      warning: 'Bu, demo amaçlı sahte hasta verileridir. Üretimde, bu bölüm uygun erişim denetimi ve şifreleme ile gerçek hasta kayıtlarını görüntüleyecektir.'
+      doctorNotes: 'Doktor Notları',
+      status: 'Durum',
+      treated: 'Tedavi Edildi',
+      monitoring: 'İzleme',
+      noAction: 'Eylem Yok',
+      loading: 'Yükleniyor...'
     }
   };
   const t = texts[language] || texts.en;
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Treated':
-        return 'bg-green-100 text-green-800';
-      case 'Monitoring':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'No Action':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const handleSearch = () => {
+    if (searchPatientId.trim()) {
+      searchPatientCases(searchPatientId.trim());
+      setHasSearched(true);
     }
   };
 
+  const handleCaseClick = (caseId) => {
+    loadCase(caseId);
+    if (onCaseSelect) {
+      onCaseSelect();
+    }
+  };
+
+  const getStatusColor = (status) => {
+    if (status?.toLowerCase().includes('treat')) return 'bg-green-100 text-green-800';
+    if (status?.toLowerCase().includes('monitor')) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-blue-100 text-blue-800';
+  };
+
   const getDiagnosisColor = (diagnosis) => {
-    if (diagnosis.toLowerCase().includes('melanoma') || diagnosis.toLowerCase().includes('carcinoma')) {
+    if (diagnosis?.toLowerCase().includes('melanoma') || diagnosis?.toLowerCase().includes('carcinoma')) {
       return 'text-red-600';
     }
     return 'text-green-600';
   };
 
   return (
-    <div className="p-8">
-      {/* Patient Information */}
+    <div className="p-8 max-h-full overflow-y-auto">
+      {/* Search Section */}
       <div className="mb-8 pb-8 border-b border-gray-200">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">{t.searchPatient}</h3>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={searchPatientId}
+            onChange={(e) => setSearchPatientId(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder={t.patientIdLabel}
+            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+          />
+          <button
+            onClick={handleSearch}
+            className="px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium flex items-center gap-2 whitespace-nowrap"
+          >
+            <Search className="w-4 h-4" />
+            {t.search}
+          </button>
+        </div>
+      </div>
+
+      {/* Cases List */}
+      {!hasSearched ? (
+        <div className="text-center py-12">
+          <Search className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 font-medium">{t.patientIdLabel}</p>
+        </div>
+      ) : filteredCases.length === 0 ? (
+        <div className="text-center py-12">
+          <AlertCircle className="w-12 h-12 text-amber-300 mx-auto mb-3" />
+          <p className="text-gray-600 font-medium">{t.noPreviousCases}</p>
+          {searchPatientId && <p className="text-sm text-gray-500 mt-1">Patient ID: {searchPatientId}</p>}
+        </div>
+      ) : (
+        <div>
+          {/* Patient Header */}
+          <div className="mb-8 pb-8 border-b border-gray-200">
+            <div className="grid grid-cols-3 gap-6">
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{t.patientName}</p>
-                <p className="text-lg font-bold text-gray-900">{MOCK_PATIENT.name}</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Patient Name</p>
+                <p className="text-xl font-bold text-gray-900">—</p>
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{t.patientId}</p>
-                <p className="text-lg font-bold text-gray-900">{MOCK_PATIENT.id}</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Patient ID</p>
+                <p className="text-xl font-bold text-gray-900">{searchPatientId}</p>
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{t.dob}</p>
-                <p className="text-lg font-bold text-gray-900">{new Date(MOCK_PATIENT.dateOfBirth).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Date of Birth</p>
+                <p className="text-xl font-bold text-gray-900">—</p>
               </div>
             </div>
-        </div>
-      {questionMetadata && (
-        <div className="mb-8 pb-8 border-b border-gray-200">
-          <h4 className="text-md font-semibold text-gray-800 mb-3">{t.questionMetadata}</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700">
-            <div><span className="font-medium">{t.location}:</span> {questionMetadata.location || '—'}</div>
-            <div><span className="font-medium">{t.diagnosis}:</span> {questionMetadata.diagnosis || '—'}</div>
-            <div><span className="font-medium">{t.ageGroup}:</span> {questionMetadata.ageGroup || '—'}</div>
-            <div><span className="font-medium">{t.sex}:</span> {questionMetadata.sex || '—'}</div>
-            <div><span className="font-medium">{t.skinTone}:</span> {questionMetadata.skinTone || '—'}</div>
-            <div><span className="font-medium">{t.patientId}:</span> {questionMetadata.patientId || '—'}</div>
-            <div><span className="font-medium">{t.hypothesis}:</span> {questionMetadata.currentHypothesis ? (CLASS_NAME_MAP ? CLASS_NAME_MAP[questionMetadata.currentHypothesis] || questionMetadata.currentHypothesis : questionMetadata.currentHypothesis) : t.notSpecified}</div>
+          </div>
+
+          {/* Previous Diagnoses */}
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">
+              {t.previousDiagnoses} ({filteredCases.length})
+            </h3>
+            <div className="space-y-3">
+              {filteredCases.map((caseItem) => {
+                const getDiagnosisName = (abbr) => {
+                  if (!abbr) return 'Unknown';
+                  return CLASS_NAME_MAP[abbr] || abbr;
+                };
+
+                const isMalignant = (diagnosis) => {
+                  if (!diagnosis) return false;
+                  const lower = diagnosis.toLowerCase();
+                  return lower.includes('melanoma') || lower.includes('carcinoma');
+                };
+
+                return (
+                  <button
+                    key={caseItem.id}
+                    onClick={() => handleCaseClick(caseItem.id)}
+                    className="w-full p-4 border border-gray-200 rounded-lg hover:border-teal-300 hover:bg-teal-50 transition-all text-left group"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <p className={`text-lg font-bold ${isMalignant(caseItem.aiPrediction) ? 'text-red-600' : 'text-green-600'}`}>
+                            {getDiagnosisName(caseItem.aiPrediction)}
+                          </p>
+                          <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                            {t.treated}
+                          </span>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <p className="text-gray-600">
+                            <span className="font-medium">Location:</span> {caseItem.lesionLocation || 'Not specified'}
+                          </p>
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Calendar className="w-4 h-4" />
+                            {new Date(caseItem.savedAt).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">{t.confidence}</p>
+                        <p className="text-2xl font-bold text-teal-600">{caseItem.confidence ? caseItem.confidence.toFixed(1) : 'N/A'}%</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
-
-      {/* Previous Diagnoses */}
-      <div>
-        <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
-          <FileText className="w-5 h-5 text-teal-400" />
-          {t.previousDiagnoses} ({MOCK_PATIENT.previousDiagnoses.length})
-        </h3>
-
-        <div className="space-y-4">
-          {MOCK_PATIENT.previousDiagnoses.map((dx) => (
-            <div
-              key={dx.id}
-              className="p-5 border border-gray-200 rounded-xl hover:shadow-md transition-shadow bg-gray-50"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className={`text-lg font-bold ${getDiagnosisColor(dx.diagnosis)}`}>
-                      {dx.diagnosis}
-                    </p>
-                    <span className={`text-xs font-semibold px-3 py-1 rounded-full ${getStatusColor(dx.status)}`}>
-                      {dx.status}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-2">
-                    <span className="font-medium">Location:</span> {dx.location}
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <Calendar className="w-4 h-4" />
-                    {new Date(dx.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                  </div>
-                </div>
-                <div className="text-right sm:text-left">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{t.confidence}</p>
-                  <p className="text-xl font-bold text-gray-900">{dx.confidence.toFixed(1)}%</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Access Info */}
-        {userType === 'personal' && (
-          <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-blue-700">
-              {t.warning}
-            </p>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

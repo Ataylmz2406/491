@@ -7,8 +7,23 @@ import PatientHistory from './components/PatientHistory';
 import SecondOpinion from './components/SecondOpinion';
 import SecondOpinionFeed from './components/SecondOpinionFeed';
 import Login from './components/Login';
+import PatientLookup from './components/PatientLookup';
+import CaseNotes from './components/CaseNotes';
+import { CaseProvider, useCaseContext } from './context/CaseContext';
+
+// Location mapping for display names
+const LOCATION_MAP = {
+  'head/neck': 'Head / Neck',
+  'upper_extremity': 'Arms / Hands (Upper)',
+  'lower_extremity': 'Legs / Feet (Lower)',
+  'torso': 'Torso (Chest/Back/Sides)',
+  'other_unknown': 'Other / Unknown'
+};
 
 function App() {
+  // Get case context
+  const { state: caseState, dispatch: caseDispatch, resetCurrentCase } = useCaseContext();
+
   // --- Landing / Navigation State ---
   const [showLanding, setShowLanding] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
@@ -23,6 +38,7 @@ function App() {
   const [clinPreview, setClinPreview] = useState(null);
 
   // --- Metadata State ---
+  const [patientId, setPatientId] = useState('');
   const [location, setLocation] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
   const [imageNotApplicable, setImageNotApplicable] = useState(false);
@@ -145,6 +161,32 @@ function App() {
     }
   }, [userType, loggedIn]);
 
+  // Watch for loaded cases from context
+  React.useEffect(() => {
+    // If a case is loaded with diagnosis data
+    if (caseState.currentCase.id && caseState.currentCase.aiPrediction) {
+      // Display the diagnosis result
+      setResult({
+        prediction: caseState.currentCase.aiPrediction,
+        confidence_score: caseState.currentCase.confidence || 0,
+        details: { top_class: caseState.currentCase.aiPrediction },
+        metadata: {},
+        grad_cam_url: null,
+      });
+      
+      // Set metadata
+      if (caseState.currentCase.patientId) {
+        setPatientId(caseState.currentCase.patientId);
+      }
+      if (caseState.currentCase.lesionLocation) {
+        setLocation(caseState.currentCase.lesionLocation);
+      }
+      
+      // Show toast indicating case loaded
+      showToast('Case loaded successfully!');
+    }
+  }, [caseState.currentCase.id]);
+
   // --- Handlers ---
   const handleUserTypeChoice = (type) => {
     setUserType(type);
@@ -194,9 +236,10 @@ function App() {
         setDermFiles(dermFiles.filter((_, i) => i !== index));
         setDermPreviews(dermPreviews.filter((_, i) => i !== index));
       } else {
-        // Clear all dermoscopic images
+        // Clear all dermoscopic images and reset case
         setDermFiles([]);
         setDermPreviews([]);
+        resetCurrentCase();
       }
     } else {
       setClinFile(null);
@@ -355,7 +398,7 @@ function App() {
               )}
             </div>
 
-            {/* User mode indicator + switcher + Patient History */}
+            {/* User mode indicator + switcher + Patient History + PatientLookup */}
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <span>{t.language}:</span>
@@ -368,14 +411,8 @@ function App() {
                   <option value="tr">{t.turkish}</option>
                 </select>
               </label>
-              {(userType === 'doctor' || userType === 'personal') && (
-                <button
-                  onClick={() => handleOpenHistory()}
-                  className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2 transition"
-                  aria-label="View patient history"
-                >
-                  {t.patientHistory}
-                </button>
+              {userType === 'doctor' && (
+                <PatientLookup language={language} currentPatientId={patientId} />
               )}
               {/* tab switcher for doctors */}
               {userType === 'doctor' && (
@@ -423,6 +460,20 @@ function App() {
                 <div className="flex flex-row gap-8 items-start">
                   {/* Left side: Uploads and button */}
                   <div className="flex flex-col w-full max-w-md gap-4">
+                    {/* Patient ID Input (Doctor Mode) */}
+                    {userType === 'doctor' && (
+                      <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
+                        <label className="block text-sm font-bold text-gray-700 mb-2">Patient ID</label>
+                        <input
+                          type="text"
+                          value={patientId}
+                          onChange={(e) => setPatientId(e.target.value)}
+                          placeholder="Enter Patient ID (e.g., P001, PAT-2026-001)"
+                          className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-2">Used for tracking patient history and case organization</p>
+                      </div>
+                    )}
                     <ImageUploader
                       language={language}
                       dermFiles={dermFiles}
@@ -493,7 +544,18 @@ function App() {
                       </div>
                     )}
                     {(result || loading) && (
-                      <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} />
+                      <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} patientId={patientId} />
+                    )}
+                    {userType === 'doctor' && result && (
+                      <CaseNotes 
+                        language={language}
+                        visible={true}
+                        result={result}
+                        patientId={patientId}
+                        location={location}
+                        locationMap={LOCATION_MAP}
+                        onSave={() => showToast('Case saved successfully!')}
+                      />
                     )}
                   </div>
                 </div>
@@ -541,7 +603,12 @@ function App() {
                   <span className="text-2xl leading-none">&times;</span>
                 </button>
               </div>
-              <PatientHistory language={language} userType={userType} questionMetadata={modalQuestionMetadata} />
+              <PatientHistory 
+                language={language} 
+                userType={userType} 
+                questionMetadata={modalQuestionMetadata}
+                onCaseSelect={() => setShowPatientHistory(false)}
+              />
             </div>
           </div>
         )}
@@ -558,4 +625,13 @@ function App() {
   );
 }
 
-export default App;
+// Wrap App with CaseProvider
+function AppWithProvider() {
+  return (
+    <CaseProvider>
+      <App />
+    </CaseProvider>
+  );
+}
+
+export default AppWithProvider;
