@@ -1,5 +1,6 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'api_service.dart';
 
 class DiagnosisRecord {
   final int id;
@@ -8,6 +9,10 @@ class DiagnosisRecord {
   final double confidence;
   final String location;
   final String status; // 'Treated', 'Monitoring', 'No Action'
+  final String? patientId;
+  final String? ageGroup;
+  final String? sex;
+  final String? skinTone;
 
   DiagnosisRecord({
     required this.id,
@@ -16,6 +21,10 @@ class DiagnosisRecord {
     required this.confidence,
     required this.location,
     required this.status,
+    this.patientId,
+    this.ageGroup,
+    this.sex,
+    this.skinTone,
   });
 
   // Convert DiagnosisRecord to JSON
@@ -27,6 +36,10 @@ class DiagnosisRecord {
       'confidence': confidence,
       'location': location,
       'status': status,
+      'patient_id': patientId,
+      'age_group': ageGroup,
+      'sex': sex,
+      'skin_tone': skinTone,
     };
   }
 
@@ -39,24 +52,29 @@ class DiagnosisRecord {
       confidence: (json['confidence'] as num).toDouble(),
       location: json['location'] as String,
       status: json['status'] as String,
+      patientId: json['patient_id'] as String?,
+      ageGroup: json['age_group'] as String?,
+      sex: json['sex'] as String?,
+      skinTone: json['skin_tone'] as String?,
     );
   }
 }
 
 class PatientHistoryService {
-  static const String _storageKey = 'patient_diagnoses';
+  static Uri get _historyUri => Uri.parse('${ApiService.baseUrl}/history');
 
-  // Load all diagnosis records from storage
-  static Future<List<DiagnosisRecord>> loadDiagnoses() async {
+  // Load diagnosis records from backend, optionally filtered by patient id.
+  static Future<List<DiagnosisRecord>> loadDiagnoses({String? patientId}) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonString = prefs.getString(_storageKey);
-
-      if (jsonString == null || jsonString.isEmpty) {
-        return [];
+      final uri = patientId == null || patientId.isEmpty
+          ? _historyUri
+          : _historyUri.replace(queryParameters: {'patient_id': patientId});
+      final response = await http.get(uri);
+      if (response.statusCode != 200) {
+        throw Exception('History fetch failed: ${response.statusCode}');
       }
 
-      final List<dynamic> jsonList = jsonDecode(jsonString);
+      final List<dynamic> jsonList = jsonDecode(response.body) as List<dynamic>;
       return jsonList
           .map((item) => DiagnosisRecord.fromJson(item as Map<String, dynamic>))
           .toList();
@@ -67,14 +85,20 @@ class PatientHistoryService {
   }
 
   // Save a new diagnosis record
-  static Future<void> saveDiagnosis(DiagnosisRecord diagnosis) async {
+  static Future<DiagnosisRecord> saveDiagnosis(DiagnosisRecord diagnosis) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final diagnoses = await loadDiagnoses();
-      diagnoses.add(diagnosis);
+      final response = await http.post(
+        _historyUri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(diagnosis.toJson()),
+      );
 
-      final jsonList = diagnoses.map((d) => d.toJson()).toList();
-      await prefs.setString(_storageKey, jsonEncode(jsonList));
+      if (response.statusCode != 200) {
+        throw Exception('History save failed: ${response.statusCode} - ${response.body}');
+      }
+      return DiagnosisRecord.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
     } catch (e) {
       print('Error saving diagnosis: $e');
       rethrow;
@@ -84,12 +108,13 @@ class PatientHistoryService {
   // Delete a diagnosis record by id
   static Future<void> deleteDiagnosis(int id) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final diagnoses = await loadDiagnoses();
-      diagnoses.removeWhere((d) => d.id == id);
+      final response = await http.delete(
+        Uri.parse('${ApiService.baseUrl}/history/$id'),
+      );
 
-      final jsonList = diagnoses.map((d) => d.toJson()).toList();
-      await prefs.setString(_storageKey, jsonEncode(jsonList));
+      if (response.statusCode != 200) {
+        throw Exception('History delete failed: ${response.statusCode}');
+      }
     } catch (e) {
       print('Error deleting diagnosis: $e');
       rethrow;
@@ -99,20 +124,14 @@ class PatientHistoryService {
   // Delete all diagnoses
   static Future<void> deleteAllDiagnoses() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_storageKey);
+      final response = await http.delete(_historyUri);
+      if (response.statusCode != 200) {
+        throw Exception('History clear failed: ${response.statusCode}');
+      }
     } catch (e) {
       print('Error deleting all diagnoses: $e');
       rethrow;
     }
   }
 
-  // Get the next available ID
-  static Future<int> getNextId() async {
-    final diagnoses = await loadDiagnoses();
-    if (diagnoses.isEmpty) {
-      return 1;
-    }
-    return (diagnoses.map((d) => d.id).reduce((a, b) => a > b ? a : b)) + 1;
-  }
 }

@@ -105,6 +105,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
   // Controllers (for backward compatibility)
   final TextEditingController locationController = TextEditingController();
   final TextEditingController diagnosisController = TextEditingController();
+  final TextEditingController patientIdController = TextEditingController();
   final TextEditingController ageGroupController = TextEditingController();
   final TextEditingController sexController = TextEditingController();
   final TextEditingController skinToneController = TextEditingController();
@@ -191,6 +192,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
 
   void openPatientHistoryDialog() {
     final questionMetadata = {
+      'patientId': patientIdController.text,
       'location': locationController.text,
       'diagnosis': diagnosisController.text,
       'ageGroup': ageGroupController.text,
@@ -239,14 +241,25 @@ Top Differential: ${result?['details']?['top_class']}''';
       final prediction = result?['prediction'] ?? 'Unknown';
       final confidence = (result?['confidence_score'] ?? 0).toDouble();
       final location = locationController.text.trim();
+      final patientId = patientIdController.text.trim();
 
       final diagnosis = DiagnosisRecord(
-        id: await PatientHistoryService.getNextId(),
+        id: 0,
         date: DateTime.now(),
         diagnosis: prediction,
         confidence: confidence,
         location: location.isEmpty ? 'Unspecified' : location,
         status: 'Monitoring', // Default status for new diagnoses
+        patientId: patientId.isEmpty ? null : patientId,
+        ageGroup: ageGroupController.text.trim().isEmpty
+            ? null
+            : ageGroupController.text.trim(),
+        sex: sexController.text.trim().isEmpty
+            ? null
+            : sexController.text.trim(),
+        skinTone: skinToneController.text.trim().isEmpty
+            ? null
+            : skinToneController.text.trim(),
       );
 
       await PatientHistoryService.saveDiagnosis(diagnosis);
@@ -547,6 +560,12 @@ Top Differential: ${result?['details']?['top_class']}''';
               ),
             ),
             const SizedBox(height: 20),
+            buildTextField(
+              controller: patientIdController,
+              label: 'Patient ID (optional)',
+              icon: Icons.badge_rounded,
+            ),
+            const SizedBox(height: 16),
             buildDropdownField(
               label: 'Lesion Location',
               value: selectedLocation,
@@ -1105,6 +1124,7 @@ Top Differential: ${result?['details']?['top_class']}''';
         doctorName: 'Dr. Alice Example',
         doctorAffiliation: 'Dermatology Dept.',
         questionMetadata: {
+          'patientId': patientIdController.text,
           'location': locationController.text,
           'diagnosis': diagnosisController.text,
           'ageGroup': ageGroupController.text,
@@ -1119,6 +1139,7 @@ Top Differential: ${result?['details']?['top_class']}''';
   void dispose() {
     locationController.dispose();
     diagnosisController.dispose();
+    patientIdController.dispose();
     ageGroupController.dispose();
     sexController.dispose();
     skinToneController.dispose();
