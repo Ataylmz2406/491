@@ -415,7 +415,7 @@ function App() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold text-gray-800">
-                {activeTab === 'analysis' ? t.newConsultation : secondOpinionSubTab === 'ask' ? t.askSecondOpinion : t.commentDoctors}
+                {activeTab === 'analysis' ? '' : secondOpinionSubTab === 'ask' ? t.askSecondOpinion : t.commentDoctors}
               </h2>
               <p className="text-sm text-gray-500">
                 {activeTab === 'analysis'
