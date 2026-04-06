@@ -23,7 +23,10 @@ export default function ImageUploader({
         uploadClinicalView: 'Upload Clinical View',
         clinicalDesc: 'Macro/Regional photo',
         invalid: 'Not valid',
-        chooseImages: 'Choose images'
+        chooseImages: 'Choose images',
+        seeExampleImages: 'see example images',
+        orDragImagesHere: 'or drag images here',
+        orDragImageHere: 'or drag an image here'
       },
       tr: {
         dermoscopicHeader: 'Dermatoskopik',
@@ -37,7 +40,10 @@ export default function ImageUploader({
         uploadClinicalView: 'Klinik Görünüm Yükle',
         clinicalDesc: 'Makro/Bölgesel fotoğraf',
         invalid: 'Geçersiz',
-        chooseImages: 'Görüntüleri seç'
+        chooseImages: 'Görüntüleri seç',
+        seeExampleImages: 'örnek resimleri göster',
+        orDragImagesHere: 'veya resimleri buraya sürükleyin',
+        orDragImageHere: 'veya bir resmi buraya sürükleyin'
       }
     };
 
@@ -124,7 +130,7 @@ export default function ImageUploader({
                     </div>
                     <div className="relative inline-flex flex-col items-start group">
                         <span className="text-sm text-brand-600 font-medium underline underline-offset-2 cursor-pointer">
-                            see example images
+                            {t.seeExampleImages}
                         </span>
                         <div className="invisible absolute left-0 top-full z-50 mt-3 w-[28rem] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl opacity-0 transition-all duration-200 group-hover:visible group-hover:opacity-100">
                             <img
@@ -144,7 +150,7 @@ export default function ImageUploader({
                         <div className="p-4 mb-3 bg-brand-100 rounded-full group-hover:bg-brand-200 transition-colors group-hover:scale-110 duration-300"><Upload className="w-14 h-14 text-brand-600" /></div>
                         <span className="text-lg font-medium text-brand-700 group-hover:text-brand-800 transition-colors">{t.uploadDermoscopy}</span>
                         <span className="text-base text-gray-400 mt-1">{t.uploadDermoscopyDesc}</span>
-                        <span className="text-sm text-brand-600 font-medium mt-3">or drag images here</span>
+                        <span className="text-sm text-brand-600 font-medium mt-3">{t.orDragImagesHere}</span>
                         <input 
                             type="file" 
                             className="hidden" 
@@ -235,7 +241,7 @@ export default function ImageUploader({
                         <div className="p-4 mb-3 bg-gray-100 rounded-full group-hover:bg-indigo-100 transition-colors group-hover:scale-110 duration-300"><Upload className="w-14 h-14 text-gray-500 group-hover:text-indigo-600 transition-colors" /></div>
                         <span className="text-lg font-medium text-gray-600 group-hover:text-indigo-700 transition-colors">{t.uploadClinicalView}</span>
                         <span className="text-base text-gray-400 mt-1">{t.clinicalDesc}</span>
-                        <span className="text-sm text-indigo-600 font-medium mt-3">or drag an image here</span>
+                        <span className="text-sm text-indigo-600 font-medium mt-3">{t.orDragImageHere}</span>
                         <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'clinical')} />
                     </label>
                 ) : (
