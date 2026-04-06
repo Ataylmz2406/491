@@ -536,17 +536,6 @@ function App() {
                   {/* Right side: Reference (before results) + Diagnosis Result */}
                   <div className="flex-1 flex flex-col items-center justify-start gap-4">
                     {/* Dermoscopic examples — hidden after results arrive */}
-                    {!result && !loading && (
-                      <div className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl animate-fade-in-up">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{t.dermoscopicExamples}</p>
-                        <img
-                          src="/sample_dermoscopic.webp"
-                          alt="Dermoscopic examples — (a)(b) benign, (c)(d) malignant"
-                          className="w-full rounded-lg object-contain opacity-90 hover:opacity-100 transition-opacity"
-                        />
-                        <p className="text-[11px] text-gray-400 mt-2 text-center">(a)(b) benign · (c)(d) malignant</p>
-                      </div>
-                    )}
                     {(result || loading) && (
                       <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} patientId={patientId} />
                     )}
