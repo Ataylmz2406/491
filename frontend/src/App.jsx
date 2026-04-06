@@ -462,93 +462,99 @@ function App() {
             <div className="max-w-6xl mx-auto">
               <div className="p-8">
                 <div className="flex flex-row gap-8 items-start">
-                  {/* Left side: Uploads and button */}
-                  <div className="flex flex-col w-full max-w-md gap-4">
-                    {/* Patient ID Input (Doctor Mode) */}
-                    {userType === 'doctor' && (
-                      <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Patient ID</label>
-                        <input
-                          type="text"
-                          value={patientId}
-                          onChange={(e) => setPatientId(e.target.value)}
-                          placeholder="Enter Patient ID (e.g., P001, PAT-2026-001)"
-                          className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                        <p className="text-xs text-gray-500 mt-2">Used for tracking patient history and case organization</p>
-                      </div>
-                    )}
-                    <ImageUploader
-                      language={language}
-                      dermFiles={dermFiles}
-                      dermPreviews={dermPreviews}
-                      clinFile={clinFile}
-                      clinPreview={clinPreview}
-                      handleFileChange={handleFileChange}
-                      clearFile={clearFile}
-                      showClinical={showClinCheckbox && userType !== 'personal'}
-                    />
-                    {/* checkbox only visible after a dermoscopic file is selected and not in personal mode */}
-                    {dermFiles.length > 0 && userType !== 'personal' && (
-                      <label htmlFor="include-clinical-checkbox" className="inline-flex items-center space-x-2 mt-2 cursor-pointer group">
-                        <input
-                          id="include-clinical-checkbox"
-                          type="checkbox"
-                          checked={showClinCheckbox}
-                          onChange={(e) => {
-                            setShowClinCheckbox(e.target.checked);
-                            if (!e.target.checked) {
-                              clearFile('clinical');
-                            }
-                          }}
-                          className="form-checkbox h-5 w-5 text-brand-600 focus:ring-2 focus:ring-brand-500"
-                        />
-                        <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Include clinical image</span>
-                      </label>
-                    )}
-                    {/* Submit Bar below uploads */}
-                    <div className="flex flex-col gap-2 pt-4">
-                      <div className="text-xs text-gray-400">
-                        <p>{t.checkImages}</p>
-                      </div>
-                      {userType === 'personal' && (
-                        <p className="text-xs text-red-500 font-medium">
-                          {t.consultProfessional}
-                        </p>
-                      )}
-                      <button
-                        onClick={handleSubmit}
-                        disabled={loading || dermFiles.length === 0}
-                        className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-white shadow-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2
-                                ${loading || dermFiles.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700 hover:shadow-lg active:scale-[0.98] focus:ring-brand-500'}`}
-                      >
-                        {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
-                        {loading ? t.processing : (userType === 'personal' ? t.runDiagnosticsPersonal : t.runDiagnostics)}
-                      </button>
-                      {error && (
-                        <div className="p-2 mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg animate-fade-in flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4" /> {error}
+                  {/* Left side: Uploads and button - hide after result */}
+                  {!result && (
+                    <div className="flex flex-col w-full max-w-md gap-4">
+                      {/* Patient ID Input (Doctor Mode) */}
+                      {userType === 'doctor' && (
+                        <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
+                          <label className="block text-sm font-bold text-gray-700 mb-2">Patient ID</label>
+                          <input
+                            type="text"
+                            value={patientId}
+                            onChange={(e) => setPatientId(e.target.value)}
+                            placeholder="Enter Patient ID (e.g., P001, PAT-2026-001)"
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <p className="text-xs text-gray-500 mt-2">Used for tracking patient history and case organization</p>
                         </div>
                       )}
-                    </div>
+                      <ImageUploader
+                        language={language}
+                        dermFiles={dermFiles}
+                        dermPreviews={dermPreviews}
+                        clinFile={clinFile}
+                        clinPreview={clinPreview}
+                        handleFileChange={handleFileChange}
+                        clearFile={clearFile}
+                        showClinical={showClinCheckbox && userType !== 'personal'}
+                      />
+                      {/* checkbox only visible after a dermoscopic file is selected and not in personal mode */}
+                      {dermFiles.length > 0 && userType !== 'personal' && (
+                        <label htmlFor="include-clinical-checkbox" className="inline-flex items-center space-x-2 mt-2 cursor-pointer group">
+                          <input
+                            id="include-clinical-checkbox"
+                            type="checkbox"
+                            checked={showClinCheckbox}
+                            onChange={(e) => {
+                              setShowClinCheckbox(e.target.checked);
+                              if (!e.target.checked) {
+                                clearFile('clinical');
+                              }
+                            }}
+                            className="form-checkbox h-5 w-5 text-brand-600 focus:ring-2 focus:ring-brand-500"
+                          />
+                          <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Include clinical image</span>
+                        </label>
+                      )}
+                      {/* Submit Bar below uploads */}
+                      <div className="flex flex-col gap-2 pt-4">
+                        <div className="text-xs text-gray-400">
+                          <p>{t.checkImages}</p>
+                        </div>
+                        {userType === 'personal' && (
+                          <p className="text-xs text-red-500 font-medium">
+                            {t.consultProfessional}
+                          </p>
+                        )}
+                        <button
+                          onClick={handleSubmit}
+                          disabled={loading || dermFiles.length === 0}
+                          className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-white shadow-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2
+                                  ${loading || dermFiles.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700 hover:shadow-lg active:scale-[0.98] focus:ring-brand-500'}`}
+                        >
+                          {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
+                          {loading ? t.processing : (userType === 'personal' ? t.runDiagnosticsPersonal : t.runDiagnostics)}
+                        </button>
+                        {error && (
+                          <div className="p-2 mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg animate-fade-in flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4" /> {error}
+                          </div>
+                        )}
+                      </div>
 
-                  </div>
-                  {/* Right side: Reference (before results) + Diagnosis Result */}
-                  <div className="flex-1 flex flex-col items-center justify-start gap-4">
+                    </div>
+                  )}
+                  {/* Right side: Diagnosis Result and Notes */}
+                  <div className={`${!result ? 'flex-1' : 'w-full'} flex ${result && userType === 'doctor' ? 'flex-row' : 'flex-col'} items-center justify-start gap-4`}>
                     {/* Dermoscopic examples — hidden after results arrive */}
                     {(result || loading) && (
-                      <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} patientId={patientId} />
+                      <div className={`${result && userType === 'doctor' ? 'flex-1' : 'w-full'}`}>
+                        <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} patientId={patientId} />
+                      </div>
                     )}
                     {userType === 'doctor' && result && (
-                      <CaseNotes 
-                        language={language}
-                        visible={true}
-                        result={result}
-                        patientId={patientId}
-                        location={location}
-                        locationMap={LOCATION_MAP}
-                        onSave={() => showToast('Case saved successfully!')}
-                      />
+                      <div className="flex-1">
+                        <CaseNotes 
+                          language={language}
+                          visible={true}
+                          result={result}
+                          patientId={patientId}
+                          location={location}
+                          locationMap={LOCATION_MAP}
+                          onSave={() => showToast('Case saved successfully!')}
+                        />
+                      </div>
                     )}
                   </div>
                 </div>
