@@ -9,6 +9,7 @@ import SecondOpinionFeed from './components/SecondOpinionFeed';
 import Login from './components/Login';
 import PatientLookup from './components/PatientLookup';
 import CaseNotes from './components/CaseNotes';
+import Tutorial from './components/Tutorial';
 import { CaseProvider, useCaseContext } from './context/CaseContext';
 
 // Location mapping for display names
@@ -27,6 +28,7 @@ function App() {
   // --- Landing / Navigation State ---
   const [showLanding, setShowLanding] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [userType, setUserType] = useState(null); // 'doctor' | 'researcher' | 'personal'
   const [loginData, setLoginData] = useState(null); // store credentials/misc info
@@ -196,15 +198,25 @@ function App() {
   };
 
   const handleGuestAccess = () => {
-    // Skip login, go straight to analysis
+    // Skip login, go straight to the tutorial and then analysis
     setLoggedIn(false);
     setShowLogin(false);
+    setShowTutorial(true);
   };
 
   const handleLoginSuccess = (data) => {
     setLoginData(data);
     setLoggedIn(true);
     setShowLogin(false);
+    setShowTutorial(true);
+  };
+
+  const handleTutorialContinue = () => {
+    setShowTutorial(false);
+  };
+
+  const handleTutorialSkip = () => {
+    setShowTutorial(false);
   };
 
   const handleLoginBack = () => {
@@ -361,6 +373,18 @@ function App() {
   // show login form if required
   if (showLogin && userType) {
     return <Login language={language} userType={userType} onLoginSuccess={handleLoginSuccess} onBack={handleLoginBack} onGuestAccess={handleGuestAccess} />;
+  }
+
+  if (showTutorial && userType) {
+    return (
+      <Tutorial
+        language={language}
+        userType={userType}
+        onContinue={handleTutorialContinue}
+        onSkip={handleTutorialSkip}
+        onLanguageChange={setLanguage}
+      />
+    );
   }
 
   return (
