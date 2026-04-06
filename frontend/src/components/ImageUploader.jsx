@@ -115,13 +115,28 @@ export default function ImageUploader({
                 onDrop={(e) => handleDrop(e, 'dermoscopic')}
             >
                 <div className="flex justify-between mb-4">
+                    <div className="flex flex-col gap-2">
                     <div className="flex flex-col gap-1">
                         <h3 className="flex items-center gap-2 font-semibold text-gray-700 text-lg">
                             <Camera className="w-8 h-8 text-brand-600" /> {t.dermoscopicHeader}
                             <span className="text-[13px] font-bold text-brand-700 bg-brand-100 px-3 py-1 rounded-full uppercase">{t.required}</span>
                         </h3>
                     </div>
-                    {dermFiles.length > 0 && <button onClick={() => clearFile('dermoscopic')}><X className="w-8 h-8 text-gray-400 hover:text-red-500" /></button>}
+                    <div className="relative inline-flex flex-col items-start group">
+                        <span className="text-sm text-brand-600 font-medium underline underline-offset-2 cursor-pointer">
+                            see example images
+                        </span>
+                        <div className="invisible absolute left-0 top-full z-50 mt-3 w-[28rem] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl opacity-0 transition-all duration-200 group-hover:visible group-hover:opacity-100">
+                            <img
+                                src="/sample_dermoscopic.webp"
+                                alt="Dermoscopic example images"
+                                className="h-80 w-full rounded-xl object-cover border border-slate-200 transition-transform duration-200 cursor-pointer hover:scale-110 active:scale-110"
+                                onClick={() => setZoomedImage('/sample_dermoscopic.webp')}
+                            />
+                        </div>
+                    </div>
+                </div>
+                {dermFiles.length > 0 && <button onClick={() => clearFile('dermoscopic')}><X className="w-8 h-8 text-gray-400 hover:text-red-500" /></button>}
                 </div>
 
                 {dermPreviews.length === 0 ? (
