@@ -7,6 +7,8 @@ export default function ImageUploader({
     showClinical = true
 }) {
     const [zoomedImage, setZoomedImage] = useState(null);
+    const [isDraggingDerm, setIsDraggingDerm] = useState(false);
+    const [isDraggingClin, setIsDraggingClin] = useState(false);
 
     const translations = {
       en: {
@@ -40,6 +42,36 @@ export default function ImageUploader({
     };
 
     const t = translations[language] || translations.en;
+
+    const handleDragOver = (e, type) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (type === 'derm') setIsDraggingDerm(true);
+        if (type === 'clin') setIsDraggingClin(true);
+    };
+
+    const handleDragLeave = (e, type) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (type === 'derm') setIsDraggingDerm(false);
+        if (type === 'clin') setIsDraggingClin(false);
+    };
+
+    const handleDrop = (e, type) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (type === 'derm') setIsDraggingDerm(false);
+        if (type === 'clin') setIsDraggingClin(false);
+
+        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+        if (files.length === 0) return;
+
+        // Simulate file input change
+        const event = {
+            target: { files: files }
+        };
+        handleFileChange(event, type);
+    };
 
     const getGridColsClass = () => {
         if (dermPreviews.length === 1) return 'grid-cols-1';
@@ -76,14 +108,18 @@ export default function ImageUploader({
             )}
 
             {/* Dermoscopic */}
-            <div className={`relative p-6 transition-all duration-300 bg-white border-2 border-dashed rounded-xl ${dermFiles.length === 0 ? 'border-brand-300 hover:border-brand-500 hover:bg-brand-50/50 hover:shadow-lg hover:scale-[1.01]' : 'border-brand-600 bg-brand-50/20 shadow-md'}`}>
+            <div 
+                className={`relative p-6 transition-all duration-300 bg-white border-2 border-dashed rounded-xl ${isDraggingDerm ? 'border-brand-500 bg-brand-50 shadow-lg scale-[1.01]' : ''} ${dermFiles.length === 0 ? 'border-brand-300 hover:border-brand-500 hover:bg-brand-50/50 hover:shadow-lg hover:scale-[1.01]' : 'border-brand-600 bg-brand-50/20 shadow-md'}`}
+                onDragOver={(e) => handleDragOver(e, 'derm')}
+                onDragLeave={(e) => handleDragLeave(e, 'derm')}
+                onDrop={(e) => handleDrop(e, 'dermoscopic')}
+            >
                 <div className="flex justify-between mb-4">
                     <div className="flex flex-col gap-1">
                         <h3 className="flex items-center gap-2 font-semibold text-gray-700 text-lg">
                             <Camera className="w-8 h-8 text-brand-600" /> {t.dermoscopicHeader}
                             <span className="text-[13px] font-bold text-brand-700 bg-brand-100 px-3 py-1 rounded-full uppercase">{t.required}</span>
                         </h3>
-                        <span className="text-xs text-gray-500 ml-10">{t.userMayUpload}</span>
                     </div>
                     {dermFiles.length > 0 && <button onClick={() => clearFile('dermoscopic')}><X className="w-8 h-8 text-gray-400 hover:text-red-500" /></button>}
                 </div>
@@ -93,10 +129,12 @@ export default function ImageUploader({
                         <div className="p-4 mb-3 bg-brand-100 rounded-full group-hover:bg-brand-200 transition-colors group-hover:scale-110 duration-300"><Upload className="w-14 h-14 text-brand-600" /></div>
                         <span className="text-lg font-medium text-brand-700 group-hover:text-brand-800 transition-colors">{t.uploadDermoscopy}</span>
                         <span className="text-base text-gray-400 mt-1">{t.uploadDermoscopyDesc}</span>
+                        <span className="text-sm text-brand-600 font-medium mt-3">or drag images here</span>
                         <input 
                             type="file" 
                             className="hidden" 
-                            accept="image/*" 
+                            accept="image/*"
+                            multiple
                             onChange={(e) => handleFileChange(e, 'dermoscopic')}
                             disabled={dermFiles.length >= 4}
                         />
@@ -136,7 +174,11 @@ export default function ImageUploader({
                         
                         {/* Upload more button */}
                         {dermFiles.length < 4 && (
-                            <label className="flex flex-col items-center justify-center h-28 cursor-pointer rounded-lg border-2 border-dashed border-brand-300 hover:border-brand-500 hover:bg-brand-50/30 transition-all group">
+                            <label className="flex flex-col items-center justify-center h-28 cursor-pointer rounded-lg border-2 border-dashed border-brand-300 hover:border-brand-500 hover:bg-brand-50/30 transition-all group"
+                                onDragOver={(e) => handleDragOver(e, 'derm')}
+                                onDragLeave={(e) => handleDragLeave(e, 'derm')}
+                                onDrop={(e) => handleDrop(e, 'dermoscopic')}
+                            >
                                 <div className="p-2 bg-brand-100 rounded-full group-hover:bg-brand-200 transition-colors">
                                     <Upload className="w-6 h-6 text-brand-600" />
                                 </div>
@@ -146,7 +188,8 @@ export default function ImageUploader({
                                 <input 
                                     type="file" 
                                     className="hidden" 
-                                    accept="image/*" 
+                                    accept="image/*"
+                                    multiple
                                     onChange={(e) => handleFileChange(e, 'dermoscopic')}
                                     disabled={dermFiles.length >= 4}
                                 />
@@ -158,7 +201,12 @@ export default function ImageUploader({
 
             {/* Clinical */}
             {showClinical && (
-              <div className={`relative p-6 transition-all duration-300 bg-white border-2 border-dashed rounded-xl ${!clinFile ? 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/30 hover:shadow-lg hover:scale-[1.01]' : 'border-indigo-600 bg-indigo-50/20 shadow-md'}`}>
+              <div 
+                className={`relative p-6 transition-all duration-300 bg-white border-2 border-dashed rounded-xl ${isDraggingClin ? 'border-indigo-500 bg-indigo-50 shadow-lg scale-[1.01]' : ''} ${!clinFile ? 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/30 hover:shadow-lg hover:scale-[1.01]' : 'border-indigo-600 bg-indigo-50/20 shadow-md'}`}
+                onDragOver={(e) => handleDragOver(e, 'clin')}
+                onDragLeave={(e) => handleDragLeave(e, 'clin')}
+                onDrop={(e) => handleDrop(e, 'clinical')}
+              >
                 <div className="flex justify-between mb-4">
                     <h3 className="flex items-center gap-2 font-semibold text-gray-700 text-lg">
                         <ImageIcon className="w-8 h-8 text-indigo-600" /> {t.clinicalHeader}
@@ -172,6 +220,7 @@ export default function ImageUploader({
                         <div className="p-4 mb-3 bg-gray-100 rounded-full group-hover:bg-indigo-100 transition-colors group-hover:scale-110 duration-300"><Upload className="w-14 h-14 text-gray-500 group-hover:text-indigo-600 transition-colors" /></div>
                         <span className="text-lg font-medium text-gray-600 group-hover:text-indigo-700 transition-colors">{t.uploadClinicalView}</span>
                         <span className="text-base text-gray-400 mt-1">{t.clinicalDesc}</span>
+                        <span className="text-sm text-indigo-600 font-medium mt-3">or drag an image here</span>
                         <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'clinical')} />
                     </label>
                 ) : (
