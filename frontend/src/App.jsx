@@ -337,9 +337,8 @@ function App() {
   if (showLanding) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-gradient-to-br from-surface-darker via-surface-dark to-brand-900 text-white p-6">
-        <div className="flex items-center gap-3 mb-4 animate-fade-in-up">
-          <Activity className="w-12 h-12 text-brand-400" />
-          <h1 className="text-5xl font-bold tracking-tight">SUDerm</h1>
+        <div className="flex items-center justify-center mb-6 animate-fade-in-up">
+          <img src="/logo.png" alt="SUDerm" className="h-[14rem] w-auto object-contain mix-blend-screen invert hue-rotate-180 brightness-110 contrast-125" />
         </div>
         <p className="text-xl text-slate-300 mb-2 font-medium animate-fade-in-up" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
           {t.landingSubtitle}
@@ -414,16 +413,22 @@ function App() {
         <header className="px-8 py-6 bg-white border-b border-gray-200">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-gray-800">
-                {activeTab === 'analysis' ? '' : secondOpinionSubTab === 'ask' ? t.askSecondOpinion : t.commentDoctors}
-              </h2>
-              <p className="text-sm text-gray-500">
-                {activeTab === 'analysis'
-                  ? ''
-                  : secondOpinionSubTab === 'ask'
-                  ? t.askSecondOpinionDesc
-                  : t.commentDoctorsDesc}
-              </p>
+              {activeTab === 'analysis' ? (
+                <div className="flex items-center mb-1 mt-1">
+                   <img src="/logo%20only.png" alt="SUDerm Header Logo" className="h-[4.5rem] w-auto object-contain" />
+                </div>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-semibold text-gray-800">
+                    {secondOpinionSubTab === 'ask' ? t.askSecondOpinion : t.commentDoctors}
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    {secondOpinionSubTab === 'ask'
+                      ? t.askSecondOpinionDesc
+                      : t.commentDoctorsDesc}
+                  </p>
+                </>
+              )}
               {loggedIn && loginData && (
                 <p className="text-xs text-gray-600 mt-1">
                   {userType === 'doctor' && (
