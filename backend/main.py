@@ -1,12 +1,14 @@
 import io
 import os
 import uuid
+import sqlite3
 import torch
 import numpy as np
 import torch.nn.functional as F
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from PIL import Image
 from contextlib import asynccontextmanager
 from model_utils import (
@@ -22,6 +24,8 @@ from model_utils import (
 
 # --- CONFIGURATION ---
 MODEL_WEIGHTS = "Weights_DualEffV2_Funnel_20251129_1830.pth"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "suderm.db")
 
 # Prefer CUDA > MPS (Apple Silicon) > CPU
 if torch.cuda.is_available():
@@ -42,6 +46,77 @@ HEATMAP_DIR = "static/heatmaps"
 model = None
 transform = None
 
+
+# --- DATABASE ---
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS diagnoses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                diagnosis TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                location TEXT NOT NULL,
+                status TEXT NOT NULL,
+                patient_id TEXT,
+                age_group TEXT,
+                sex TEXT,
+                skin_tone TEXT
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    ensure_schema_columns()
+
+
+class DiagnosisIn(BaseModel):
+    date: str
+    diagnosis: str
+    confidence: float
+    location: str
+    status: str
+    patient_id: str | None = None
+    age_group: str | None = None
+    sex: str | None = None
+    skin_tone: str | None = None
+
+
+class DiagnosisOut(DiagnosisIn):
+    id: int
+
+
+def ensure_schema_columns():
+    """Adds newly introduced optional columns for older SQLite files."""
+    conn = get_db_connection()
+    try:
+        columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(diagnoses)").fetchall()
+        }
+        migration_columns = {
+            "patient_id": "TEXT",
+            "age_group": "TEXT",
+            "sex": "TEXT",
+            "skin_tone": "TEXT",
+        }
+        for column_name, column_type in migration_columns.items():
+            if column_name not in columns:
+                conn.execute(
+                    f"ALTER TABLE diagnoses ADD COLUMN {column_name} {column_type}"
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
 # --- LIFESPAN MANAGER ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -49,6 +124,9 @@ async def lifespan(app: FastAPI):
     
     # 1. Create heatmap directory
     os.makedirs(HEATMAP_DIR, exist_ok=True)
+
+    # 1.1 Initialize SQLite database
+    init_db()
     
     # 2. Initialize Model
     print(f"Initializing model on {DEVICE}...")
@@ -146,6 +224,98 @@ def check_zoom_level(img: Image.Image):
 @app.get("/")
 def read_root():
     return {"message": "SUDerm - Dual-Branch Skin Lesion Analysis API (Sabanci University)"}
+
+
+@app.get("/history", response_model=list[DiagnosisOut])
+def get_history(patient_id: str | None = None):
+    conn = get_db_connection()
+    try:
+        if patient_id:
+            rows = conn.execute(
+                """
+                SELECT id, date, diagnosis, confidence, location, status,
+                       patient_id, age_group, sex, skin_tone
+                FROM diagnoses
+                WHERE patient_id = ?
+                ORDER BY datetime(date) DESC, id DESC
+                """,
+                (patient_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT id, date, diagnosis, confidence, location, status,
+                       patient_id, age_group, sex, skin_tone
+                FROM diagnoses
+                ORDER BY datetime(date) DESC, id DESC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+@app.post("/history", response_model=DiagnosisOut)
+def create_history_item(payload: DiagnosisIn):
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO diagnoses (
+                date, diagnosis, confidence, location, status,
+                patient_id, age_group, sex, skin_tone
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload.date,
+                payload.diagnosis,
+                payload.confidence,
+                payload.location,
+                payload.status,
+                payload.patient_id,
+                payload.age_group,
+                payload.sex,
+                payload.skin_tone,
+            ),
+        )
+        conn.commit()
+        row = conn.execute(
+            """
+            SELECT id, date, diagnosis, confidence, location, status,
+                   patient_id, age_group, sex, skin_tone
+            FROM diagnoses
+            WHERE id = ?
+            """,
+            (cursor.lastrowid,),
+        ).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
+
+
+@app.delete("/history/{diagnosis_id}")
+def delete_history_item(diagnosis_id: int):
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute("DELETE FROM diagnoses WHERE id = ?", (diagnosis_id,))
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Diagnosis not found")
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.delete("/history")
+def delete_all_history():
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM diagnoses")
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
 
 @app.post("/predict")
 async def predict(

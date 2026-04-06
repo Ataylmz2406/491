@@ -47,8 +47,11 @@ class _PatientHistoryPageState extends State<PatientHistoryPage> {
   }
 
   Future<void> _loadDiagnoses() async {
-    final loadedDiagnoses =
-        await PatientHistoryService.loadDiagnoses();
+    final String patientIdFilter =
+        (widget.questionMetadata?['patientId'] ?? '').toString().trim();
+    final loadedDiagnoses = await PatientHistoryService.loadDiagnoses(
+      patientId: patientIdFilter.isEmpty ? null : patientIdFilter,
+    );
     setState(() {
       diagnoses = loadedDiagnoses;
       patientInfo = PatientInfo(
