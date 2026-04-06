@@ -294,6 +294,19 @@ function App() {
     }
   };
 
+  const handleNewSession = () => {
+    // Clear results and images to start fresh
+    setResult(null);
+    setLoading(false);
+    setError(null);
+    setDermFiles([]);
+    setDermPreviews([]);
+    setClinFile(null);
+    setClinPreview(null);
+    setShowClinCheckbox(false);
+    resetCurrentCase();
+  };
+
   // watch dermFiles to clear checkbox/clinical when removed
   React.useEffect(() => {
     if (dermFiles.length === 0) {
@@ -436,6 +449,15 @@ function App() {
                     {t.labelFeed}
                   </button>
                 </div>
+              )}
+              {/* New Session button */}
+              {activeTab === 'analysis' && result && (
+                <button
+                  onClick={handleNewSession}
+                  className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  {t.newConsultation}
+                </button>
               )}
               <select
                 value={userType || ''}
