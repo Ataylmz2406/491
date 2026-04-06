@@ -423,14 +423,18 @@ function App() {
                   >
                     {t.labelAnalysis}
                   </button>
-                  <select
-                    value={selectedTab !== 'analysis' ? selectedTab : 'ask'}
-                    onChange={(e) => setSelectedTab(e.target.value)}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors outline-none cursor-pointer border-none ${selectedTab !== 'analysis' ? 'bg-white text-gray-900 shadow-sm' : 'bg-transparent text-gray-500 hover:text-gray-700'}`}
+                  <button
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'ask' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    onClick={() => setSelectedTab('ask')}
                   >
-                    <option value="ask">{t.labelAsk}</option>
-                    <option value="feed">{t.labelFeed}</option>
-                  </select>
+                    {t.labelAsk}
+                  </button>
+                  <button
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'feed' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    onClick={() => setSelectedTab('feed')}
+                  >
+                    {t.labelFeed}
+                  </button>
                 </div>
               )}
               <select
