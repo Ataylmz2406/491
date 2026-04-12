@@ -111,7 +111,9 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
 
     // Sort predictions by probability descending
     const sortedPredictions = result?.details?.all_predictions
-        ? [...result.details.all_predictions].sort((a, b) => b.prob - a.prob)
+        ? [...result.details.all_predictions]
+            .filter((pred, index, self) => self.findIndex(p => p.class === pred.class) === index) // Remove duplicates
+            .sort((a, b) => b.prob - a.prob)
         : [];
 
     // Split into Malignant and Benign groups, each sorted descending

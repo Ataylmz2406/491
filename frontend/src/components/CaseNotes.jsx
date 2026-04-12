@@ -305,6 +305,20 @@ TAGS: ${state.currentCase.tags.length > 0 ? state.currentCase.tags.join(', ') : 
             </span>
           ))}
         </div>
+        {/* Quick-add buttons for common labels */}
+        <div className="mb-3 flex flex-wrap gap-2">
+          {['unlabeled', 'urgent', 'monitored', 'needs-biopsy', 'follow-up'].map(predefinedTag => (
+            !state.currentCase.tags.includes(predefinedTag) && (
+              <button
+                key={predefinedTag}
+                onClick={() => handleAddTag(predefinedTag)}
+                className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 border border-gray-300 transition-colors"
+              >
+                + {predefinedTag}
+              </button>
+            )
+          ))}
+        </div>
         <div className="flex gap-2">
           <input
             type="text"

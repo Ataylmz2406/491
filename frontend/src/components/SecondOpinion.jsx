@@ -6,16 +6,16 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       doctorName: 'Doctor Name',
       affiliation: 'Affiliation / Notes',
       patientId: 'Patient ID',
-      currentHypothesis: 'Current Hypothesis',
+      aiPrediction: 'AI Prediction',
       uploadImages: 'Upload Images',
       chooseImages: 'Choose images',
       notSpecified: 'Not specified',
-      caption: 'Caption',
-      addCaption: 'Add a caption for the images...',
+      notes: 'Notes',
+      addNotes: 'Add notes for the images...',
       postSecondOpinion: 'Post Second Opinion',
       comments: 'Comments',
       addComment: 'Add Comment',
-      noCaption: 'No caption',
+      noNotes: 'No notes',
       patientHistory: 'History / Metadata',
       remove: '✕'
     },
@@ -23,16 +23,16 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       doctorName: 'Doktor Adı',
       affiliation: 'Kurum / Notlar',
       patientId: 'Hasta ID',
-      currentHypothesis: 'Mevcut Hipotez',
+      aiPrediction: 'AI Tahmini',
       uploadImages: 'Görüntü Yükleyin',
       chooseImages: 'Görüntüleri seç',
       notSpecified: 'Belirtilmedi',
-      caption: 'Başlık',
-      addCaption: 'Görüntüler için bir başlık ekleyin...',
+      notes: 'Notlar',
+      addNotes: 'Görüntüler için notlar ekleyin...',
       postSecondOpinion: 'İkinci Görüş Gönder',
       comments: 'Yorumlar',
       addComment: 'Yorum Ekle',
-      noCaption: 'Başlık yok',
+      noNotes: 'Not yok',
       patientHistory: 'Geçmiş / Metaveri',
       remove: '✕'
     }
@@ -41,8 +41,8 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
 
   // patient-specific states
   const [patientId, setPatientId] = useState('');
-  const [currentHypothesis, setCurrentHypothesis] = useState('');
-  const [posts, setPosts] = useState([]); // array of { id, uploads: [], caption: '', comments: [], posted: false }
+  const [aiPrediction, setAiPrediction] = useState('');
+  const [posts, setPosts] = useState([]); // array of { id, uploads: [], notes: '', comments: [], posted: false }
 
   const handleFileAdd = (e) => {
     const files = Array.from(e.target.files);
@@ -63,7 +63,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
         const newPost = {
           id: Date.now(),
           uploads: newItems,
-          caption: '',
+          notes: '',
           comments: [],
           posted: false
         };
@@ -72,8 +72,8 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
     });
   };
 
-  const updateCaption = (postId, text) => {
-    setPosts((prev) => prev.map(post => post.id === postId ? { ...post, caption: text } : post));
+  const updateNotes = (postId, text) => {
+    setPosts((prev) => prev.map(post => post.id === postId ? { ...post, notes: text } : post));
   };
 
   const addComment = (postId, comment) => {
@@ -97,12 +97,12 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       if (questionMetadata?.sex) metadataParts.push(`Sex: ${questionMetadata.sex}`);
       if (questionMetadata?.skinTone) metadataParts.push(`Skin Tone: ${questionMetadata.skinTone}`);
       if (patientId) metadataParts.push(`Patient ID: ${patientId}`);
-      if (currentHypothesis) metadataParts.push(`Hypothesis: ${currentHypothesis}`);
+      if (aiPrediction) metadataParts.push(`AI Prediction: ${aiPrediction}`);
 
       const metadataText = metadataParts.join(' | ');
-      const newCaption = [post.caption, metadataText].filter(Boolean).join('\n\n');
+      const newNotes = [post.notes, metadataText].filter(Boolean).join('\n\n');
 
-      return { ...post, posted: true, caption: newCaption };
+      return { ...post, posted: true, notes: newNotes };
     }));
   };
 
@@ -110,7 +110,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
     onViewHistory({
       ...questionMetadata,
       patientId,
-      currentHypothesis
+      aiPrediction
     });
   };
 
@@ -153,10 +153,10 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t.currentHypothesis}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t.aiPrediction}</label>
           <select
-            value={currentHypothesis}
-            onChange={(e) => setCurrentHypothesis(e.target.value)}
+            value={aiPrediction}
+            onChange={(e) => setAiPrediction(e.target.value)}
             className="w-full px-3 py-2 border rounded-md"
           >
             <option value="">Not specified</option>
@@ -219,11 +219,11 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
 
           {!post.posted && (
             <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.caption}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.notes}</label>
                   <textarea
-                    value={post.caption}
-                    onChange={(e) => updateCaption(post.id, e.target.value)}
-                    placeholder={t.addCaption}
+                    value={post.notes}
+                    onChange={(e) => updateNotes(post.id, e.target.value)}
+                    placeholder={t.addNotes}
                     className="w-full px-3 py-2 border rounded-md"
                     rows={2}
                   />
@@ -232,8 +232,8 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
 
               {post.posted && (
                 <div className="mb-4">
-                  <p className="text-sm font-medium text-gray-700">{t.caption}:</p>
-                  <p className="text-gray-800">{post.caption || t.noCaption}</p>
+                  <p className="text-sm font-medium text-gray-700">{t.notes}:</p>
+                  <p className="text-gray-800">{post.notes || t.noNotes}</p>
                 </div>
               )}
 

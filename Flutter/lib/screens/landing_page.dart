@@ -287,7 +287,7 @@ class _LandingPageState extends State<LandingPage> with TickerProviderStateMixin
                 Consumer<LocaleProvider>(
                   builder: (context, localeProvider, child) {
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 32),
+                      padding: const EdgeInsets.only(bottom: 60),
                       child: Center(
                         child: Container(
                           padding: const EdgeInsets.all(8),

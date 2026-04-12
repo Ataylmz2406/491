@@ -19,28 +19,28 @@ class ImageUpload {
 class OpinionPost {
   final int id;
   final List<ImageUpload> uploads;
-  final String caption;
+  final String notes;
   final List<String> comments;
   final bool posted;
 
   OpinionPost({
     required this.id,
     required this.uploads,
-    required this.caption,
+    required this.notes,
     required this.comments,
     required this.posted,
   });
 
   OpinionPost copyWith({
     List<ImageUpload>? uploads,
-    String? caption,
+    String? notes,
     List<String>? comments,
     bool? posted,
   }) {
     return OpinionPost(
       id: id,
       uploads: uploads ?? this.uploads,
-      caption: caption ?? this.caption,
+      notes: notes ?? this.notes,
       comments: comments ?? this.comments,
       posted: posted ?? this.posted,
     );
@@ -81,7 +81,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
   final ImagePicker picker = ImagePicker();
   final TextEditingController patientIdController = TextEditingController();
   final TextEditingController commentController = TextEditingController();
-  String currentHypothesis = '';
+  String aiPrediction = '';
   List<OpinionPost> posts = [];
   int imageIdCounter = 0;
 
@@ -116,7 +116,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
           posts.add(OpinionPost(
             id: DateTime.now().millisecondsSinceEpoch,
             uploads: newUploads,
-            caption: '',
+            notes: '',
             comments: [],
             posted: false,
           ));
@@ -130,10 +130,10 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
     }
   }
 
-  void updateCaption(int postId, String text) {
+  void updateNotes(int postId, String text) {
     final index = posts.indexWhere((p) => p.id == postId);
     if (index != -1) {
-      posts[index] = posts[index].copyWith(caption: text);
+      posts[index] = posts[index].copyWith(notes: text);
       setState(() {});
     }
   }
@@ -179,7 +179,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
     final questionMetadata = {
       ...?widget.questionMetadata,
       'patientId': patientIdController.text,
-      'currentHypothesis': currentHypothesis,
+      'aiPrediction': aiPrediction,
     };
 
     Navigator.push(
@@ -321,7 +321,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Current Hypothesis',
+            'AI Prediction',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -330,7 +330,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
           ),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: currentHypothesis.isEmpty ? null : currentHypothesis,
+            value: aiPrediction.isEmpty ? null : aiPrediction,
             decoration: InputDecoration(
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               border: OutlineInputBorder(
@@ -356,7 +356,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
             ],
             onChanged: (value) {
               setState(() {
-                currentHypothesis = value ?? '';
+                aiPrediction = value ?? '';
               });
             },
           ),
@@ -463,7 +463,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
           const SizedBox(height: 16),
           if (!post.posted) ...[
             const Text(
-              'Caption',
+              'Notes',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -472,10 +472,10 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
             ),
             const SizedBox(height: 6),
             TextField(
-              onChanged: (value) => updateCaption(post.id, value),
+              onChanged: (value) => updateNotes(post.id, value),
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: 'Add a caption for the images...',
+                hintText: 'Add notes for the images...',
                 contentPadding: const EdgeInsets.all(12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -504,7 +504,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
             ),
           ] else ...[
             const Text(
-              'Caption:',
+              'Notes:',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -513,7 +513,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
             ),
             const SizedBox(height: 4),
             Text(
-              post.caption.isEmpty ? 'No caption' : post.caption,
+              post.notes.isEmpty ? 'No notes' : post.notes,
               style: const TextStyle(
                 fontSize: 14,
                 color: Color(0xFF374151),

@@ -514,6 +514,17 @@ class _PatientHistoryPageState extends State<PatientHistoryPage> {
                 else
                   Column(
                     children: diagnoses
+                        // Remove duplicates: keep only the first occurrence of each diagnosis+location combination
+                        .fold<List<DiagnosisRecord>>([], (list, diagnosis) {
+                          final isDuplicate = list.any((d) => 
+                            d.diagnosis == diagnosis.diagnosis && 
+                            d.location == diagnosis.location
+                          );
+                          if (!isDuplicate) {
+                            list.add(diagnosis);
+                          }
+                          return list;
+                        })
                         .map((diagnosis) => _buildDiagnosisCard(diagnosis))
                         .toList(),
                   ),

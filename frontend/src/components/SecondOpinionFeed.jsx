@@ -5,7 +5,7 @@ const DUMMY_POSTS = [
     id: 1,
     doctorName: 'Dr. John Smith',
     affiliation: 'General Hospital',
-    caption: 'Suspected basal cell carcinoma on the nose. Looking for confirmation.\n\nLocation: Face | Diagnosis: BCC | Age Group: 50-59 | Sex: Male | Skin Tone: Fair | Patient ID: P-2024-001 | Hypothesis: BCC',
+    caption: 'Suspected basal cell carcinoma on the nose. Looking for confirmation.\n\nLocation: Face | Diagnosis: BCC | Age Group: 50-59 | Sex: Male | Skin Tone: Fair | Patient ID: P-2024-001 | AI Prediction: BCC',
     uploads: [
       { preview: '/src/assets/pigmented-lesion-01.jpg' }, // placeholder
       { preview: '/src/assets/Skin-Lesions-2.jpg' }
@@ -20,7 +20,7 @@ const DUMMY_POSTS = [
     id: 2,
     doctorName: 'Dr. Sarah Johnson',
     affiliation: 'Dermatology Clinic',
-    caption: 'Melanoma concern on back. Urgent second opinion needed.\n\nLocation: Back | Diagnosis: MEL | Age Group: 40-49 | Sex: Female | Skin Tone: Medium | Patient ID: P-2024-002 | Hypothesis: MEL',
+    caption: 'Melanoma concern on back. Urgent second opinion needed.\n\nLocation: Back | Diagnosis: MEL | Age Group: 40-49 | Sex: Female | Skin Tone: Medium | Patient ID: P-2024-002 | AI Prediction: MEL',
     uploads: [
       { preview: '/src/assets/What_Causes_Vascular_Skin_Lesions1-1080x675.png' }
     ],
@@ -33,7 +33,7 @@ const DUMMY_POSTS = [
     id: 3,
     doctorName: 'Dr. David Lee',
     affiliation: 'Skin Cancer Center',
-    caption: 'Benign nevus, but monitoring advised.\n\nLocation: Arm | Diagnosis: NV | Age Group: 30-39 | Sex: Male | Skin Tone: Olive | Patient ID: P-2024-003 | Hypothesis: NV',
+    caption: 'Benign nevus, but monitoring advised.\n\nLocation: Arm | Diagnosis: NV | Age Group: 30-39 | Sex: Male | Skin Tone: Olive | Patient ID: P-2024-003 | AI Prediction: NV',
     uploads: [
       { preview: '/src/assets/pigmented-lesion-01.jpg' },
       { preview: '/src/assets/Skin-Lesions-2.jpg' },
