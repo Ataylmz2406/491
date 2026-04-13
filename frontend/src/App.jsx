@@ -594,7 +594,7 @@ function App() {
                     {/* Dermoscopic examples — hidden after results arrive */}
                     {(result || loading) && (
                       <div className={`${result && userType === 'doctor' ? 'flex-1' : 'w-full'}`}>
-                        <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} patientId={patientId} />
+                        <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} patientId={patientId} dermPreviews={dermPreviews} clinPreview={clinPreview} />
                       </div>
                     )}
                     {userType === 'doctor' && result && (
