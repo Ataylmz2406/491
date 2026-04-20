@@ -2,13 +2,19 @@ import io
 import os
 import uuid
 import sqlite3
+import hashlib
+import secrets
+import base64
+import binascii
+from datetime import datetime, timezone, timedelta
 import torch
 import numpy as np
 import torch.nn.functional as F
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from PIL import Image
 from contextlib import asynccontextmanager
 from model_utils import (
@@ -51,7 +57,12 @@ transform = None
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def init_db():
@@ -73,10 +84,104 @@ def init_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS second_opinion_posts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                is_anonymous INTEGER NOT NULL DEFAULT 0,
+                created_by_identity TEXT,
+                doctor_name TEXT,
+                doctor_affiliation TEXT,
+                patient_id TEXT,
+                current_hypothesis TEXT,
+                question_text TEXT NOT NULL,
+                lesion_location TEXT,
+                diagnosis TEXT,
+                age_group TEXT,
+                sex TEXT,
+                skin_tone TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS second_opinion_images (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                image_url TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY(post_id) REFERENCES second_opinion_posts(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS second_opinion_comments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                is_anonymous INTEGER NOT NULL DEFAULT 0,
+                created_by_identity TEXT,
+                author_name TEXT,
+                comment_text TEXT NOT NULL,
+                FOREIGN KEY(post_id) REFERENCES second_opinion_posts(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auth_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token_hash TEXT NOT NULL UNIQUE,
+                user_type TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                revoked_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_diagnoses_patient_date
+            ON diagnoses(patient_id, date DESC)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_second_op_posts_status_created
+            ON second_opinion_posts(status, created_at DESC)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_second_op_comments_post_created
+            ON second_opinion_comments(post_id, created_at ASC)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_second_op_images_post_sort
+            ON second_opinion_images(post_id, sort_order ASC)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_auth_tokens_expiry
+            ON auth_tokens(expires_at)
+            """
+        )
         conn.commit()
     finally:
         conn.close()
     ensure_schema_columns()
+    ensure_second_opinion_schema_columns()
+    ensure_second_opinion_strict_constraints()
+    ensure_auth_token_schema_columns()
 
 
 class DiagnosisIn(BaseModel):
@@ -93,6 +198,351 @@ class DiagnosisIn(BaseModel):
 
 class DiagnosisOut(DiagnosisIn):
     id: int
+
+
+class SecondOpinionPostCreate(BaseModel):
+    is_anonymous: bool = False
+    doctor_name: str | None = None
+    doctor_affiliation: str | None = None
+    patient_id: str | None = None
+    current_hypothesis: str | None = None
+    question_text: str
+    lesion_location: str | None = None
+    diagnosis: str | None = None
+    age_group: str | None = None
+    sex: str | None = None
+    skin_tone: str | None = None
+    image_urls: list[str] = Field(default_factory=list)
+
+
+class SecondOpinionPostUpdate(BaseModel):
+    question_text: str | None = None
+    current_hypothesis: str | None = None
+    status: str | None = None
+
+
+class SecondOpinionCommentCreate(BaseModel):
+    is_anonymous: bool = False
+    author_name: str | None = None
+    comment_text: str
+
+
+class SecondOpinionCommentOut(BaseModel):
+    id: int
+    post_id: int
+    created_at: str
+    is_anonymous: bool
+    author_name: str
+    comment_text: str
+
+
+class SecondOpinionPostOut(BaseModel):
+    id: int
+    created_at: str
+    updated_at: str
+    status: str
+    is_anonymous: bool
+    doctor_name: str
+    doctor_affiliation: str | None = None
+    patient_id: str | None = None
+    current_hypothesis: str | None = None
+    question_text: str
+    lesion_location: str | None = None
+    diagnosis: str | None = None
+    age_group: str | None = None
+    sex: str | None = None
+    skin_tone: str | None = None
+    image_urls: list[str]
+    comments: list[SecondOpinionCommentOut]
+
+
+SECOND_OPINION_ALLOWED_STATUSES = {"open", "resolved", "archived", "draft"}
+SECOND_OPINION_MAX_IMAGES = 12
+SECOND_OPINION_ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+SECOND_OPINION_MAX_IMAGE_BYTES = 2 * 1024 * 1024
+SECOND_OPINION_MAX_TOTAL_IMAGE_BYTES = 8 * 1024 * 1024
+SECOND_OPINION_MAX_IMAGE_DATA_URL_CHARS = 3_000_000
+SECOND_OPINION_POST_MAX_REQUEST_BYTES = 12 * 1024 * 1024
+SECOND_OPINION_MAX_QUESTION_LEN = 4000
+SECOND_OPINION_MAX_COMMENT_LEN = 2000
+AUTH_TOKEN_TTL_HOURS = 24
+AUTH_ALLOWED_USER_TYPES = {"doctor", "researcher", "personal"}
+
+
+class AuthLoginRequest(BaseModel):
+    user_type: str
+    password: str
+    doctor_id: str | None = None
+    hospital: str | None = None
+    email: str | None = None
+
+
+class AuthLoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    expires_at: str
+    user_type: str
+    display_name: str
+
+
+class AuthMeResponse(BaseModel):
+    user_type: str
+    display_name: str
+    expires_at: str
+
+
+def _clean_optional_text(value: str | None, max_len: int | None = None) -> str | None:
+    if value is None:
+        return None
+    trimmed = value.strip()
+    if not trimmed:
+        return None
+    if max_len is not None and len(trimmed) > max_len:
+        raise HTTPException(status_code=400, detail=f"Text exceeds maximum length ({max_len})")
+    return trimmed
+
+
+def _validate_second_opinion_status(status: str) -> str:
+    normalized = status.strip().lower()
+    if normalized not in SECOND_OPINION_ALLOWED_STATUSES:
+        allowed = ", ".join(sorted(SECOND_OPINION_ALLOWED_STATUSES))
+        raise HTTPException(status_code=400, detail=f"Invalid status. Allowed values: {allowed}")
+    return normalized
+
+
+def _validate_second_opinion_image_urls(image_urls: list[str]) -> list[str]:
+    cleaned_image_urls: list[str] = []
+    total_image_bytes = 0
+
+    for idx, image_url in enumerate(image_urls, start=1):
+        cleaned_url = _clean_optional_text(image_url)
+        if not cleaned_url:
+            continue
+
+        if len(cleaned_url) > SECOND_OPINION_MAX_IMAGE_DATA_URL_CHARS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Image {idx} is too large. "
+                    f"Maximum data URL length is {SECOND_OPINION_MAX_IMAGE_DATA_URL_CHARS} characters"
+                ),
+            )
+
+        if not cleaned_url.startswith("data:"):
+            raise HTTPException(status_code=400, detail=f"Image {idx} must be a base64 data URL")
+
+        header, separator, encoded_payload = cleaned_url.partition(",")
+        if separator != "," or ";base64" not in header:
+            raise HTTPException(status_code=400, detail=f"Image {idx} is not a valid base64 data URL")
+
+        mime_type = header[5:].split(";", 1)[0].strip().lower()
+        if mime_type not in SECOND_OPINION_ALLOWED_IMAGE_MIME_TYPES:
+            allowed = ", ".join(sorted(SECOND_OPINION_ALLOWED_IMAGE_MIME_TYPES))
+            raise HTTPException(
+                status_code=400,
+                detail=f"Image {idx} type is not allowed. Allowed types: {allowed}",
+            )
+
+        try:
+            image_bytes = base64.b64decode(encoded_payload, validate=True)
+        except (binascii.Error, ValueError):
+            raise HTTPException(status_code=400, detail=f"Image {idx} has invalid base64 payload")
+
+        image_size = len(image_bytes)
+        if image_size == 0:
+            raise HTTPException(status_code=400, detail=f"Image {idx} payload is empty")
+
+        if image_size > SECOND_OPINION_MAX_IMAGE_BYTES:
+            max_mb = SECOND_OPINION_MAX_IMAGE_BYTES / (1024 * 1024)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Image {idx} exceeds maximum size ({max_mb:.1f} MB)",
+            )
+
+        total_image_bytes += image_size
+        if total_image_bytes > SECOND_OPINION_MAX_TOTAL_IMAGE_BYTES:
+            total_mb = SECOND_OPINION_MAX_TOTAL_IMAGE_BYTES / (1024 * 1024)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Total image payload exceeds maximum size ({total_mb:.1f} MB)",
+            )
+
+        cleaned_image_urls.append(cleaned_url)
+
+    return cleaned_image_urls
+
+
+def _build_requester_identity(token_row: sqlite3.Row) -> str:
+    user_type = (token_row["user_type"] or "").strip().lower()
+    subject = (token_row["subject"] or "").strip().lower()
+    if subject:
+        return f"{user_type}:{subject}"
+    display_name = (token_row["display_name"] or "").strip().lower()
+    return f"{user_type}:{display_name}"
+
+
+def _assert_post_owner(
+    post_row: sqlite3.Row,
+    requester_identity: str,
+    requester_display_name: str,
+):
+    requester_identity = requester_identity.strip().lower()
+    owner_identity = (post_row["created_by_identity"] or "").strip().lower()
+
+    if not owner_identity or owner_identity != requester_identity:
+        raise HTTPException(status_code=403, detail="You can only modify your own posts")
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _extract_bearer_token(authorization: str | None) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    parts = authorization.strip().split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer" or not parts[1].strip():
+        raise HTTPException(status_code=401, detail="Invalid Authorization header")
+    return parts[1].strip()
+
+
+def _verify_auth_token(authorization: str) -> sqlite3.Row:
+    token = _extract_bearer_token(authorization)
+    token_hash = _hash_token(token)
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT user_type, subject, display_name, expires_at, revoked_at
+            FROM auth_tokens
+            WHERE token_hash = ?
+            """,
+            (token_hash,),
+        ).fetchone()
+        if not row or row["revoked_at"] is not None:
+            raise HTTPException(status_code=401, detail="Invalid or revoked token")
+
+        expires_at = row["expires_at"]
+        if datetime.fromisoformat(expires_at) <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=401, detail="Token expired")
+        return row
+    finally:
+        conn.close()
+
+
+def _issue_auth_token(user_type: str, subject: str, display_name: str) -> AuthLoginResponse:
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = _hash_token(raw_token)
+    now = datetime.now(timezone.utc)
+    expires_at = now.replace(microsecond=0) + timedelta(hours=AUTH_TOKEN_TTL_HOURS)
+
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO auth_tokens (token_hash, user_type, subject, display_name, created_at, expires_at, revoked_at)
+            VALUES (?, ?, ?, ?, ?, ?, NULL)
+            """,
+            (
+                token_hash,
+                user_type,
+                subject,
+                display_name,
+                now.isoformat(),
+                expires_at.isoformat(),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return AuthLoginResponse(
+        access_token=raw_token,
+        token_type="bearer",
+        expires_at=expires_at.isoformat(),
+        user_type=user_type,
+        display_name=display_name,
+    )
+
+
+def _public_doctor_name(raw_name: str | None, is_anonymous: bool) -> str:
+    if is_anonymous:
+        return "Anonymous Doctor"
+    if raw_name and raw_name.strip():
+        return raw_name.strip()
+    return "Doctor"
+
+
+def _serialize_comment(row: sqlite3.Row) -> dict:
+    is_anonymous = bool(row["is_anonymous"])
+    return {
+        "id": row["id"],
+        "post_id": row["post_id"],
+        "created_at": row["created_at"],
+        "is_anonymous": is_anonymous,
+        "author_name": _public_doctor_name(row["author_name"], is_anonymous),
+        "comment_text": row["comment_text"],
+    }
+
+
+def _get_post_or_404(conn: sqlite3.Connection, post_id: int) -> sqlite3.Row:
+    post_row = conn.execute(
+        """
+        SELECT id, created_at, updated_at, status, is_anonymous,
+               created_by_identity, doctor_name, doctor_affiliation, patient_id, current_hypothesis,
+               question_text, lesion_location, diagnosis, age_group, sex, skin_tone
+        FROM second_opinion_posts
+        WHERE id = ?
+        """,
+        (post_id,),
+    ).fetchone()
+    if not post_row:
+        raise HTTPException(status_code=404, detail="Second opinion post not found")
+    return post_row
+
+
+def _build_post_payload(conn: sqlite3.Connection, post_row: sqlite3.Row) -> dict:
+    post_id = post_row["id"]
+    image_rows = conn.execute(
+        """
+        SELECT image_url
+        FROM second_opinion_images
+        WHERE post_id = ?
+        ORDER BY sort_order ASC, id ASC
+        """,
+        (post_id,),
+    ).fetchall()
+
+    comment_rows = conn.execute(
+        """
+        SELECT id, post_id, created_at, is_anonymous, author_name, comment_text
+        FROM second_opinion_comments
+        WHERE post_id = ?
+        ORDER BY datetime(created_at) ASC, id ASC
+        """,
+        (post_id,),
+    ).fetchall()
+
+    is_anonymous = bool(post_row["is_anonymous"])
+    return {
+        "id": post_id,
+        "created_at": post_row["created_at"],
+        "updated_at": post_row["updated_at"],
+        "status": post_row["status"],
+        "is_anonymous": is_anonymous,
+        "doctor_name": _public_doctor_name(post_row["doctor_name"], is_anonymous),
+        "doctor_affiliation": None if is_anonymous else post_row["doctor_affiliation"],
+        "patient_id": post_row["patient_id"],
+        "current_hypothesis": post_row["current_hypothesis"],
+        "question_text": post_row["question_text"],
+        "lesion_location": post_row["lesion_location"],
+        "diagnosis": post_row["diagnosis"],
+        "age_group": post_row["age_group"],
+        "sex": post_row["sex"],
+        "skin_tone": post_row["skin_tone"],
+        "image_urls": [r["image_url"] for r in image_rows],
+        "comments": [_serialize_comment(r) for r in comment_rows],
+    }
 
 
 def ensure_schema_columns():
@@ -113,6 +563,345 @@ def ensure_schema_columns():
                 conn.execute(
                     f"ALTER TABLE diagnoses ADD COLUMN {column_name} {column_type}"
                 )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def ensure_second_opinion_schema_columns():
+    """Adds missing second-opinion columns for older SQLite files."""
+    conn = get_db_connection()
+    try:
+        post_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(second_opinion_posts)").fetchall()
+        }
+        post_migrations = {
+            "status": "TEXT NOT NULL DEFAULT 'open'",
+            "is_anonymous": "INTEGER NOT NULL DEFAULT 0",
+            "created_by_identity": "TEXT",
+            "doctor_name": "TEXT",
+            "doctor_affiliation": "TEXT",
+            "patient_id": "TEXT",
+            "current_hypothesis": "TEXT",
+            "question_text": "TEXT",
+            "lesion_location": "TEXT",
+            "diagnosis": "TEXT",
+            "age_group": "TEXT",
+            "sex": "TEXT",
+            "skin_tone": "TEXT",
+            "created_at": "TEXT",
+            "updated_at": "TEXT",
+        }
+        for column_name, column_type in post_migrations.items():
+            if column_name not in post_columns:
+                conn.execute(
+                    f"ALTER TABLE second_opinion_posts ADD COLUMN {column_name} {column_type}"
+                )
+
+        comment_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(second_opinion_comments)").fetchall()
+        }
+        comment_migrations = {
+            "created_at": "TEXT",
+            "is_anonymous": "INTEGER NOT NULL DEFAULT 0",
+            "created_by_identity": "TEXT",
+            "author_name": "TEXT",
+            "comment_text": "TEXT",
+        }
+        for column_name, column_type in comment_migrations.items():
+            if column_name not in comment_columns:
+                conn.execute(
+                    f"ALTER TABLE second_opinion_comments ADD COLUMN {column_name} {column_type}"
+                )
+
+        image_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(second_opinion_images)").fetchall()
+        }
+        image_migrations = {
+            "sort_order": "INTEGER NOT NULL DEFAULT 0",
+            "image_url": "TEXT",
+        }
+        for column_name, column_type in image_migrations.items():
+            if column_name not in image_columns:
+                conn.execute(
+                    f"ALTER TABLE second_opinion_images ADD COLUMN {column_name} {column_type}"
+                )
+
+        # Backfill identity for legacy rows to avoid weak name-based ownership checks.
+        if "created_by_identity" in post_columns:
+            conn.execute(
+                """
+                UPDATE second_opinion_posts
+                SET created_by_identity = 'doctor:' || lower(trim(doctor_name))
+                WHERE (created_by_identity IS NULL OR trim(created_by_identity) = '')
+                  AND doctor_name IS NOT NULL
+                  AND trim(doctor_name) != ''
+                """
+            )
+            conn.execute(
+                """
+                UPDATE second_opinion_posts
+                SET created_by_identity = 'doctor:' || lower(trim(
+                    CASE
+                        WHEN instr(doctor_name, '@') > 0 THEN substr(doctor_name, 1, instr(doctor_name, '@') - 1)
+                        ELSE doctor_name
+                    END
+                ))
+                WHERE doctor_name IS NOT NULL
+                  AND trim(doctor_name) != ''
+                  AND (
+                      created_by_identity IS NULL
+                      OR trim(created_by_identity) = ''
+                      OR lower(created_by_identity) LIKE 'doctor:%@%'
+                  )
+                """
+            )
+
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _normalize_sql(sql: str | None) -> str:
+    if not sql:
+        return ""
+    return " ".join(sql.lower().split())
+
+
+def _has_second_opinion_strict_constraints(conn: sqlite3.Connection) -> bool:
+    rows = conn.execute(
+        """
+        SELECT name, sql
+        FROM sqlite_master
+        WHERE type = 'table'
+          AND name IN ('second_opinion_posts', 'second_opinion_comments', 'second_opinion_images')
+        """
+    ).fetchall()
+    sql_by_name = {row["name"]: _normalize_sql(row["sql"]) for row in rows}
+
+    posts_sql = sql_by_name.get("second_opinion_posts", "")
+    comments_sql = sql_by_name.get("second_opinion_comments", "")
+    images_sql = sql_by_name.get("second_opinion_images", "")
+
+    posts_ok = (
+        "status text not null" in posts_sql
+        and "check (status in ('open', 'resolved', 'archived', 'draft'))" in posts_sql
+        and "is_anonymous integer not null default 0" in posts_sql
+        and "check (is_anonymous in (0, 1))" in posts_sql
+        and "question_text text not null" in posts_sql
+    )
+    comments_ok = (
+        "is_anonymous integer not null default 0" in comments_sql
+        and "check (is_anonymous in (0, 1))" in comments_sql
+        and "comment_text text not null" in comments_sql
+    )
+    images_ok = (
+        "image_url text not null" in images_sql
+        and "check (length(image_url) <= " in images_sql
+        and "sort_order integer not null default 0" in images_sql
+        and "check (sort_order >= 0)" in images_sql
+    )
+    return posts_ok and comments_ok and images_ok
+
+
+def ensure_second_opinion_strict_constraints():
+    """Rebuilds second-opinion tables with strict constraints when legacy schemas are detected."""
+    conn = get_db_connection()
+    try:
+        if _has_second_opinion_strict_constraints(conn):
+            return
+
+        now_iso = utc_now_iso()
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("BEGIN")
+
+        conn.execute(
+            """
+            CREATE TABLE second_opinion_posts_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'archived', 'draft')),
+                is_anonymous INTEGER NOT NULL DEFAULT 0 CHECK (is_anonymous IN (0, 1)),
+                created_by_identity TEXT,
+                doctor_name TEXT,
+                doctor_affiliation TEXT,
+                patient_id TEXT,
+                current_hypothesis TEXT,
+                question_text TEXT NOT NULL,
+                lesion_location TEXT,
+                diagnosis TEXT,
+                age_group TEXT,
+                sex TEXT,
+                skin_tone TEXT
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            INSERT INTO second_opinion_posts_new (
+                id, created_at, updated_at, status, is_anonymous,
+                created_by_identity, doctor_name, doctor_affiliation, patient_id, current_hypothesis,
+                question_text, lesion_location, diagnosis, age_group, sex, skin_tone
+            )
+            SELECT
+                id,
+                COALESCE(NULLIF(trim(created_at), ''), ?),
+                COALESCE(NULLIF(trim(updated_at), ''), COALESCE(NULLIF(trim(created_at), ''), ?)),
+                CASE
+                    WHEN lower(trim(status)) IN ('open', 'resolved', 'archived', 'draft') THEN lower(trim(status))
+                    ELSE 'open'
+                END,
+                CASE WHEN CAST(is_anonymous AS INTEGER) = 1 THEN 1 ELSE 0 END,
+                NULLIF(trim(created_by_identity), ''),
+                NULLIF(trim(doctor_name), ''),
+                NULLIF(trim(doctor_affiliation), ''),
+                NULLIF(trim(patient_id), ''),
+                NULLIF(trim(current_hypothesis), ''),
+                COALESCE(NULLIF(trim(question_text), ''), 'Second opinion request'),
+                NULLIF(trim(lesion_location), ''),
+                NULLIF(trim(diagnosis), ''),
+                NULLIF(trim(age_group), ''),
+                NULLIF(trim(sex), ''),
+                NULLIF(trim(skin_tone), '')
+            FROM second_opinion_posts
+            """,
+            (now_iso, now_iso),
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE second_opinion_comments_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                is_anonymous INTEGER NOT NULL DEFAULT 0 CHECK (is_anonymous IN (0, 1)),
+                created_by_identity TEXT,
+                author_name TEXT,
+                comment_text TEXT NOT NULL,
+                FOREIGN KEY(post_id) REFERENCES second_opinion_posts_new(id) ON DELETE CASCADE
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            INSERT INTO second_opinion_comments_new (
+                id, post_id, created_at, is_anonymous, created_by_identity, author_name, comment_text
+            )
+            SELECT
+                c.id,
+                c.post_id,
+                COALESCE(NULLIF(trim(c.created_at), ''), ?),
+                CASE WHEN CAST(c.is_anonymous AS INTEGER) = 1 THEN 1 ELSE 0 END,
+                NULLIF(trim(c.created_by_identity), ''),
+                NULLIF(trim(c.author_name), ''),
+                COALESCE(NULLIF(trim(c.comment_text), ''), 'No comment')
+            FROM second_opinion_comments c
+            WHERE c.post_id IS NOT NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM second_opinion_posts_new p
+                  WHERE p.id = c.post_id
+              )
+            """,
+            (now_iso,),
+        )
+
+        conn.execute(
+            f"""
+            CREATE TABLE second_opinion_images_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                image_url TEXT NOT NULL CHECK (length(image_url) <= {SECOND_OPINION_MAX_IMAGE_DATA_URL_CHARS}),
+                sort_order INTEGER NOT NULL DEFAULT 0 CHECK (sort_order >= 0),
+                FOREIGN KEY(post_id) REFERENCES second_opinion_posts_new(id) ON DELETE CASCADE
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            INSERT INTO second_opinion_images_new (id, post_id, image_url, sort_order)
+            SELECT
+                i.id,
+                i.post_id,
+                trim(i.image_url),
+                CASE
+                    WHEN CAST(i.sort_order AS INTEGER) >= 0 THEN CAST(i.sort_order AS INTEGER)
+                    ELSE 0
+                END
+            FROM second_opinion_images i
+            WHERE i.post_id IS NOT NULL
+              AND NULLIF(trim(i.image_url), '') IS NOT NULL
+              AND length(trim(i.image_url)) <= ?
+              AND EXISTS (
+                  SELECT 1
+                  FROM second_opinion_posts_new p
+                  WHERE p.id = i.post_id
+              )
+            """,
+            (SECOND_OPINION_MAX_IMAGE_DATA_URL_CHARS,),
+        )
+
+        conn.execute("DROP TABLE second_opinion_images")
+        conn.execute("DROP TABLE second_opinion_comments")
+        conn.execute("DROP TABLE second_opinion_posts")
+        conn.execute("ALTER TABLE second_opinion_posts_new RENAME TO second_opinion_posts")
+        conn.execute("ALTER TABLE second_opinion_comments_new RENAME TO second_opinion_comments")
+        conn.execute("ALTER TABLE second_opinion_images_new RENAME TO second_opinion_images")
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_second_op_posts_status_created
+            ON second_opinion_posts(status, created_at DESC)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_second_op_comments_post_created
+            ON second_opinion_comments(post_id, created_at ASC)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_second_op_images_post_sort
+            ON second_opinion_images(post_id, sort_order ASC)
+            """
+        )
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.close()
+
+
+def ensure_auth_token_schema_columns():
+    """Adds missing auth token columns for older SQLite files."""
+    conn = get_db_connection()
+    try:
+        token_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(auth_tokens)").fetchall()
+        }
+        if "subject" not in token_columns:
+            conn.execute("ALTER TABLE auth_tokens ADD COLUMN subject TEXT")
+
+        conn.execute(
+            """
+            UPDATE auth_tokens
+            SET subject = lower(trim(display_name))
+            WHERE (subject IS NULL OR trim(subject) = '')
+              AND display_name IS NOT NULL
+              AND trim(display_name) != ''
+            """
+        )
         conn.commit()
     finally:
         conn.close()
@@ -158,6 +947,26 @@ async def lifespan(app: FastAPI):
     transform = None
 
 app = FastAPI(lifespan=lifespan, title="SUDerm API", version="1.0.0")
+
+
+@app.middleware("http")
+async def enforce_second_opinion_request_limit(request: Request, call_next):
+    if request.method == "POST" and request.url.path == "/second-opinion/posts":
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                content_length_value = int(content_length)
+            except ValueError:
+                return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length header"})
+
+            if content_length_value > SECOND_OPINION_POST_MAX_REQUEST_BYTES:
+                max_mb = SECOND_OPINION_POST_MAX_REQUEST_BYTES / (1024 * 1024)
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"Request payload too large (max {max_mb:.1f} MB)"},
+                )
+
+    return await call_next(request)
 
 # --- STATIC FILES (for Grad-CAM heatmaps) ---
 os.makedirs(HEATMAP_DIR, exist_ok=True)
@@ -224,6 +1033,69 @@ def check_zoom_level(img: Image.Image):
 @app.get("/")
 def read_root():
     return {"message": "SUDerm - Dual-Branch Skin Lesion Analysis API (Sabanci University)"}
+
+
+@app.post("/auth/login", response_model=AuthLoginResponse)
+def auth_login(payload: AuthLoginRequest):
+    user_type = payload.user_type.strip().lower()
+    if user_type not in AUTH_ALLOWED_USER_TYPES:
+        allowed = ", ".join(sorted(AUTH_ALLOWED_USER_TYPES))
+        raise HTTPException(status_code=400, detail=f"Invalid user_type. Allowed values: {allowed}")
+
+    if len(payload.password.strip()) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+
+    if user_type == "doctor":
+        doctor_id = _clean_optional_text(payload.doctor_id, 120)
+        hospital = _clean_optional_text(payload.hospital, 255)
+        if not doctor_id:
+            raise HTTPException(status_code=400, detail="doctor_id is required for doctor login")
+        subject = doctor_id.lower()
+        display_name = doctor_id
+        if hospital:
+            display_name = f"{doctor_id} @ {hospital}"
+    else:
+        email = _clean_optional_text(payload.email, 255)
+        if not email:
+            raise HTTPException(status_code=400, detail="email is required for this user type")
+        subject = email.lower()
+        display_name = email
+
+    return _issue_auth_token(user_type=user_type, subject=subject, display_name=display_name)
+
+
+@app.get("/auth/me", response_model=AuthMeResponse)
+def auth_me(authorization: str = Header(default="")):
+    token_row = _verify_auth_token(authorization)
+    return AuthMeResponse(
+        user_type=token_row["user_type"],
+        display_name=token_row["display_name"],
+        expires_at=token_row["expires_at"],
+    )
+
+
+@app.post("/auth/logout")
+def auth_logout(authorization: str = Header(default="")):
+    token = _extract_bearer_token(authorization)
+    token_hash = _hash_token(token)
+    now = utc_now_iso()
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute(
+            """
+            UPDATE auth_tokens
+            SET revoked_at = ?
+            WHERE token_hash = ? AND revoked_at IS NULL
+            """,
+            (now, token_hash),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=401, detail="Invalid or already revoked token")
+        return {"ok": True}
+    finally:
+        conn.close()
 
 
 @app.get("/history", response_model=list[DiagnosisOut])
@@ -313,6 +1185,275 @@ def delete_all_history():
     try:
         conn.execute("DELETE FROM diagnoses")
         conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.get("/second-opinion/posts", response_model=list[SecondOpinionPostOut])
+def list_second_opinion_posts(
+    status: str | None = None,
+    doctor_name: str | None = None,
+    patient_id: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    conn = get_db_connection()
+    try:
+        where_clauses = []
+        params: list[object] = []
+
+        if status:
+            where_clauses.append("status = ?")
+            params.append(_validate_second_opinion_status(status))
+
+        cleaned_doctor_name = _clean_optional_text(doctor_name)
+        if cleaned_doctor_name:
+            where_clauses.append("lower(doctor_name) = ?")
+            params.append(cleaned_doctor_name.lower())
+
+        cleaned_patient_id = _clean_optional_text(patient_id)
+        if cleaned_patient_id:
+            where_clauses.append("patient_id = ?")
+            params.append(cleaned_patient_id)
+
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        rows = conn.execute(
+            f"""
+            SELECT id, created_at, updated_at, status, is_anonymous,
+                   doctor_name, doctor_affiliation, patient_id, current_hypothesis,
+                   question_text, lesion_location, diagnosis, age_group, sex, skin_tone
+            FROM second_opinion_posts
+            {where_sql}
+            ORDER BY datetime(created_at) DESC, id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (*params, limit, offset),
+        ).fetchall()
+
+        return [_build_post_payload(conn, row) for row in rows]
+    finally:
+        conn.close()
+
+
+@app.get("/second-opinion/posts/{post_id}", response_model=SecondOpinionPostOut)
+def get_second_opinion_post(post_id: int):
+    conn = get_db_connection()
+    try:
+        post_row = _get_post_or_404(conn, post_id)
+        return _build_post_payload(conn, post_row)
+    finally:
+        conn.close()
+
+
+@app.post("/second-opinion/posts", response_model=SecondOpinionPostOut)
+def create_second_opinion_post(
+    payload: SecondOpinionPostCreate,
+    authorization: str = Header(default=""),
+):
+    token_row = _verify_auth_token(authorization)
+    requester_display_name = (token_row["display_name"] or "").strip()
+    requester_identity = _build_requester_identity(token_row)
+
+    question_text = _clean_optional_text(payload.question_text, SECOND_OPINION_MAX_QUESTION_LEN)
+    if not question_text:
+        raise HTTPException(status_code=400, detail="question_text is required")
+
+    if len(payload.image_urls) > SECOND_OPINION_MAX_IMAGES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"A post can include at most {SECOND_OPINION_MAX_IMAGES} images",
+        )
+
+    cleaned_image_urls = _validate_second_opinion_image_urls(payload.image_urls)
+
+    status_value = "open"
+
+    conn = get_db_connection()
+    try:
+        now = utc_now_iso()
+        doctor_name = None if payload.is_anonymous else requester_display_name
+        doctor_affiliation = None if payload.is_anonymous else _clean_optional_text(payload.doctor_affiliation, 255)
+
+        cursor = conn.execute(
+            """
+            INSERT INTO second_opinion_posts (
+                created_at, updated_at, status, is_anonymous,
+                created_by_identity, doctor_name, doctor_affiliation, patient_id, current_hypothesis,
+                question_text, lesion_location, diagnosis, age_group, sex, skin_tone
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                now,
+                now,
+                status_value,
+                int(payload.is_anonymous),
+                requester_identity,
+                doctor_name,
+                doctor_affiliation,
+                _clean_optional_text(payload.patient_id, 120),
+                _clean_optional_text(payload.current_hypothesis, 120),
+                question_text,
+                _clean_optional_text(payload.lesion_location, 120),
+                _clean_optional_text(payload.diagnosis, 120),
+                _clean_optional_text(payload.age_group, 120),
+                _clean_optional_text(payload.sex, 32),
+                _clean_optional_text(payload.skin_tone, 64),
+            ),
+        )
+
+        post_id = cursor.lastrowid
+        for idx, image_url in enumerate(cleaned_image_urls):
+            conn.execute(
+                """
+                INSERT INTO second_opinion_images (post_id, image_url, sort_order)
+                VALUES (?, ?, ?)
+                """,
+                (post_id, image_url, idx),
+            )
+
+        conn.commit()
+        post_row = _get_post_or_404(conn, post_id)
+        return _build_post_payload(conn, post_row)
+    finally:
+        conn.close()
+
+
+@app.post("/second-opinion/posts/{post_id}/comments", response_model=SecondOpinionCommentOut)
+def create_second_opinion_comment(
+    post_id: int,
+    payload: SecondOpinionCommentCreate,
+    authorization: str = Header(default=""),
+):
+    token_row = _verify_auth_token(authorization)
+    requester_display_name = (token_row["display_name"] or "").strip()
+    requester_identity = _build_requester_identity(token_row)
+
+    comment_text = _clean_optional_text(payload.comment_text, SECOND_OPINION_MAX_COMMENT_LEN)
+    if not comment_text:
+        raise HTTPException(status_code=400, detail="comment_text is required")
+
+    conn = get_db_connection()
+    try:
+        _get_post_or_404(conn, post_id)
+        now = utc_now_iso()
+        author_name = None if payload.is_anonymous else requester_display_name
+
+        cursor = conn.execute(
+            """
+            INSERT INTO second_opinion_comments (
+                post_id, created_at, is_anonymous, created_by_identity, author_name, comment_text
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                post_id,
+                now,
+                int(payload.is_anonymous),
+                requester_identity,
+                author_name,
+                comment_text,
+            ),
+        )
+
+        conn.execute(
+            """
+            UPDATE second_opinion_posts
+            SET updated_at = ?
+            WHERE id = ?
+            """,
+            (now, post_id),
+        )
+
+        conn.commit()
+        row = conn.execute(
+            """
+            SELECT id, post_id, created_at, is_anonymous, author_name, comment_text
+            FROM second_opinion_comments
+            WHERE id = ?
+            """,
+            (cursor.lastrowid,),
+        ).fetchone()
+        return _serialize_comment(row)
+    finally:
+        conn.close()
+
+
+@app.patch("/second-opinion/posts/{post_id}", response_model=SecondOpinionPostOut)
+def update_second_opinion_post(
+    post_id: int,
+    payload: SecondOpinionPostUpdate,
+    authorization: str = Header(default=""),
+):
+    token_row = _verify_auth_token(authorization)
+    requester_identity = _build_requester_identity(token_row)
+    requester_display_name = token_row["display_name"]
+
+    conn = get_db_connection()
+    try:
+        post_row = _get_post_or_404(conn, post_id)
+        _assert_post_owner(post_row, requester_identity, requester_display_name)
+
+        updates: list[str] = []
+        params: list[object] = []
+
+        if payload.question_text is not None:
+            question_text = _clean_optional_text(payload.question_text, SECOND_OPINION_MAX_QUESTION_LEN)
+            if not question_text:
+                raise HTTPException(status_code=400, detail="question_text cannot be empty")
+            updates.append("question_text = ?")
+            params.append(question_text)
+
+        if payload.current_hypothesis is not None:
+            updates.append("current_hypothesis = ?")
+            params.append(_clean_optional_text(payload.current_hypothesis, 120))
+
+        if payload.status is not None:
+            updates.append("status = ?")
+            params.append(_validate_second_opinion_status(payload.status))
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updatable fields provided")
+
+        updates.append("updated_at = ?")
+        params.append(utc_now_iso())
+        params.append(post_id)
+
+        conn.execute(
+            f"""
+            UPDATE second_opinion_posts
+            SET {', '.join(updates)}
+            WHERE id = ?
+            """,
+            tuple(params),
+        )
+        conn.commit()
+
+        refreshed = _get_post_or_404(conn, post_id)
+        return _build_post_payload(conn, refreshed)
+    finally:
+        conn.close()
+
+
+@app.delete("/second-opinion/posts/{post_id}")
+def delete_second_opinion_post(post_id: int, authorization: str = Header(default="")):
+    token_row = _verify_auth_token(authorization)
+    requester_identity = _build_requester_identity(token_row)
+    requester_display_name = token_row["display_name"]
+
+    conn = get_db_connection()
+    try:
+        post_row = _get_post_or_404(conn, post_id)
+        _assert_post_owner(post_row, requester_identity, requester_display_name)
+
+        cursor = conn.execute(
+            "DELETE FROM second_opinion_posts WHERE id = ?",
+            (post_id,),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Second opinion post not found")
         return {"ok": True}
     finally:
         conn.close()

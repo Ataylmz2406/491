@@ -11,6 +11,9 @@ import PatientLookup from './components/PatientLookup';
 import CaseNotes from './components/CaseNotes';
 import Tutorial from './components/Tutorial';
 import { CaseProvider, useCaseContext } from './context/CaseContext';
+import { clearAccessToken, setAccessToken } from './services/authService';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // Location mapping for display names
 const LOCATION_MAP = {
@@ -155,13 +158,16 @@ function App() {
 
   React.useEffect(() => {
     if (userType === 'doctor' && loggedIn) {
-      setDoctorProfile({ name: 'Dr. Alice Example', info: 'Dermatology Dept.' });
+      setDoctorProfile({
+        name: loginData?.doctorName || loginData?.doctorId || '',
+        info: loginData?.hospital || '',
+      });
     } else if (userType === 'doctor' && !loggedIn) {
-      setDoctorProfile({ name: 'Anonymous', info: 'Anonymous' });
+      setDoctorProfile({ name: '', info: '' });
     } else {
       setDoctorProfile({ name: '', info: '' });
     }
-  }, [userType, loggedIn]);
+  }, [userType, loggedIn, loginData]);
 
   // Watch for loaded cases from context
   React.useEffect(() => {
@@ -200,11 +206,15 @@ function App() {
   const handleGuestAccess = () => {
     // Skip login, go straight to the tutorial and then analysis
     setLoggedIn(false);
+    clearAccessToken();
     setShowLogin(false);
     setShowTutorial(true);
   };
 
   const handleLoginSuccess = (data) => {
+    if (data?.accessToken) {
+      setAccessToken(data.accessToken);
+    }
     setLoginData(data);
     setLoggedIn(true);
     setShowLogin(false);
@@ -220,6 +230,7 @@ function App() {
   };
 
   const handleLoginBack = () => {
+    clearAccessToken();
     setUserType(null);
     setShowLanding(true);
     setShowLogin(false);
@@ -282,7 +293,7 @@ function App() {
       formData.append('lesion_location', location);
       formData.append('diagnosis', diagnosis);
 
-      const response = await fetch('http://127.0.0.1:8000/predict', {
+      const response = await fetch(`${API_BASE_URL}/predict`, {
         method: 'POST',
         body: formData,
       });
@@ -497,6 +508,7 @@ function App() {
                   const type = e.target.value;
                   setUserType(type);
                   // require re-login when switching modes
+                  clearAccessToken();
                   setLoggedIn(false);
                   setShowLogin(true);
                 }}
