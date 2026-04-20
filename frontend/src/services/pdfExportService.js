@@ -100,7 +100,15 @@ export class PDFExportService {
       'VASC': 'Vascular Lesions',
     };
 
-    const predictions = caseData.details?.all_predictions || [];
+    // Get predictions and sort by probability in descending order
+    const predictions = (caseData.details?.all_predictions || [])
+      .slice() // Create a copy to avoid mutating original
+      .sort((a, b) => b.prob - a.prob); // Sort highest to lowest
+    
+    // Get images
+    const images = caseData.images || {};
+    const dermoscopicImages = images.dermoscopic || [];
+    const clinicalImage = images.clinical;
 
     const html = `
 <!DOCTYPE html>
@@ -202,6 +210,43 @@ export class PDFExportService {
             font-size: 11px;
             font-weight: bold;
         }
+        .image-gallery { 
+            display: flex; 
+            gap: 15px; 
+            flex-wrap: wrap; 
+            margin-top: 15px;
+        }
+        .image-item { 
+            flex: 0 1 calc(50% - 7.5px); 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            overflow: hidden;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+        .image-label { 
+            font-size: 11px; 
+            font-weight: bold; 
+            color: #666;
+            text-transform: uppercase;
+            padding: 8px;
+            background-color: #f3f4f6;
+            border-bottom: 1px solid #ddd;
+        }
+        .image-content { 
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            min-height: 150px;
+        }
+        .image-content img { 
+            max-width: 100%; 
+            max-height: 200px; 
+            object-fit: contain;
+        }
     </style>
 </head>
 <body>
@@ -229,6 +274,31 @@ export class PDFExportService {
                 </div>
             </div>
         </div>
+
+        <!-- Uploaded Images -->
+        ${(dermoscopicImages && dermoscopicImages.length > 0) || clinicalImage ? `
+        <div class="section">
+            <div class="section-title">Dermoscopic Images</div>
+            <div class="image-gallery">
+                ${dermoscopicImages && dermoscopicImages.length > 0 ? dermoscopicImages.map((img, idx) => `
+                    <div class="image-item">
+                        <div class="image-label">Dermoscopic Image ${idx + 1}</div>
+                        <div class="image-content">
+                            <img src="${img}" alt="Dermoscopic Image ${idx + 1}" />
+                        </div>
+                    </div>
+                `).join('') : ''}
+                ${clinicalImage ? `
+                    <div class="image-item">
+                        <div class="image-label">Clinical View</div>
+                        <div class="image-content">
+                            <img src="${clinicalImage}" alt="Clinical View" />
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+        ` : ''}
 
         <!-- AI Prediction -->
         <div class="section">

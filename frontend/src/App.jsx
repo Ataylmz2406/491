@@ -88,9 +88,9 @@ function App() {
       forResearchersDesc: 'Model benchmarking & batch analysis',
       personalUseDesc: 'Quick exploratory screening',
       newConsultation: 'New Consultation Session',
-      askSecondOpinion: 'Ask for Second Opinion',
+      askSecondOpinion: 'Ask Other Doctors',
       commentDoctors: 'Comment on Other Doctors',
-      askSecondOpinionDesc: 'Submit your second-opinion images and comments.',
+      askSecondOpinionDesc: 'Submit your images and ask for another doctor\'s perspective.',
       commentDoctorsDesc: "Comment on other doctors' second opinion requests.",
       patientHistory: 'Patient History',
       historyMetadata: 'History / Metadata',
@@ -103,7 +103,7 @@ function App() {
       noResult: 'No result yet. Upload images and run diagnosis.',
       noResultPersonal: 'No result yet. Upload images to analyze my skin in personal use.',
       labelAnalysis: 'Analysis',
-      labelAsk: 'Ask for a second opinion',
+      labelAsk: 'Ask other doctors',
       labelFeed: 'Help other doctors',
       language: 'Language',
       english: 'English',
@@ -119,9 +119,9 @@ function App() {
       forResearchersDesc: 'Model karşılaştırma ve toplu analiz',
       personalUseDesc: 'Hızlı keşif taraması',
       newConsultation: 'Yeni Konsültasyon Oturumu',
-      askSecondOpinion: 'İkinci Görüş İste',
+      askSecondOpinion: 'Diğer Doktorlara Sor',
       commentDoctors: 'Diğer Doktorlara Yorum Yap',
-      askSecondOpinionDesc: 'İkinci görüş resimlerinizi ve yorumlarınızı gönderin.',
+      askSecondOpinionDesc: 'Resimlerinizi gönderin ve başka bir doktorun perspektifini isteyin.',
       commentDoctorsDesc: 'Diğer doktorların ikinci görüş taleplerine yorum yapın.',
       patientHistory: 'Hasta Geçmişi',
       historyMetadata: 'Geçmiş / Metaveri',
@@ -134,7 +134,7 @@ function App() {
       noResult: 'Sonuç yok. Görüntü yükleyin ve teşhis çalıştırın.',
       noResultPersonal: 'Sonuç yok. Bireysel kullanımda cildimi analiz etmek için görüntü yükleyin.',
       labelAnalysis: 'Analiz',
-      labelAsk: 'İkinci görüş iste',
+      labelAsk: 'Diğer doktorlara sor',
       labelFeed: 'Diğer doktorlara yardımcı ol',
       language: 'Dil',
       english: 'English',
@@ -441,13 +441,16 @@ function App() {
                 </>
               )}
               {loggedIn && loginData && (
-                <p className="text-xs text-gray-600 mt-1">
+                <div className="text-xs text-gray-600 mt-1 max-w-xs">
                   {userType === 'doctor' && (
-                    <span>Hospital: {loginData.hospital} | ID: {loginData.doctorId}</span>
+                    <>
+                      <div>Hospital: {loginData.hospital}</div>
+                      <div>ID: {loginData.doctorId}</div>
+                    </>
                   )}
                   {userType === 'researcher' && <span>Researcher: {loginData.email}</span>}
                   {userType === 'personal' && <span>User: {loginData.email}</span>}
-                </p>
+                </div>
               )}
             </div>
 
@@ -603,7 +606,7 @@ function App() {
                     {/* Dermoscopic examples — hidden after results arrive */}
                     {(result || loading) && (
                       <div className={`${result && userType === 'doctor' ? 'flex-1' : 'w-full'}`}>
-                        <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} patientId={patientId} />
+                        <DiagnosisResult language={language} result={result} location={location} userType={userType} loading={loading} showToast={showToast} patientId={patientId} dermPreviews={dermPreviews} clinPreview={clinPreview} />
                       </div>
                     )}
                     {userType === 'doctor' && result && (

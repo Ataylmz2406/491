@@ -2,7 +2,7 @@ import React from 'react';
 import { AlertCircle, CheckCircle, Info, Clipboard, FileDown } from 'lucide-react';
 import { PDFExportService } from '../services/pdfExportService';
 
-export default function DiagnosisResult({ language = 'en', result, location, userType, loading, showToast, patientId }) {
+export default function DiagnosisResult({ language = 'en', result, location, userType, loading, showToast, patientId, dermPreviews = [], clinPreview = null }) {
     const texts = {
       en: {
         title: 'Diagnosis Result',
@@ -82,6 +82,10 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                 details: result.details,
                 lesionLocation: location,
                 savedAt: new Date().toISOString(),
+                images: {
+                    dermoscopic: dermPreviews || [],
+                    clinical: clinPreview
+                }
             };
             
             await PDFExportService.generateCaseReport(caseData, language);
@@ -111,7 +115,9 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
 
     // Sort predictions by probability descending
     const sortedPredictions = result?.details?.all_predictions
-        ? [...result.details.all_predictions].sort((a, b) => b.prob - a.prob)
+        ? [...result.details.all_predictions]
+            .filter((pred, index, self) => self.findIndex(p => p.class === pred.class) === index) // Remove duplicates
+            .sort((a, b) => b.prob - a.prob)
         : [];
 
     // Split into Malignant and Benign groups, each sorted descending

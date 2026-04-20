@@ -90,7 +90,7 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
           {userType === 'doctor' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700">{t.hospitalName}</label>
+                <label className="block text-sm font-medium text-gray-700">{t.hospitalName} <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   value={hospital}
@@ -100,7 +100,7 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">{t.doctorId}</label>
+                <label className="block text-sm font-medium text-gray-700">{t.doctorId} <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   value={doctorId}
@@ -110,7 +110,7 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">{t.password}</label>
+                <label className="block text-sm font-medium text-gray-700">{t.password} <span className="text-red-500">*</span></label>
                 <input
                   type="password"
                   value={password}
