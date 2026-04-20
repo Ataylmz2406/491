@@ -9,6 +9,7 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
   const [doctorId, setDoctorId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
 
   const translations = {
     en: {
@@ -21,8 +22,11 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
       email: 'Email',
       back: '← Back',
       login: 'Log In',
+      register: 'Register',
+      needAccount: 'Need an account? Register',
+      haveAccount: 'Already have an account? Log in',
       continueAsGuest: 'Continue as Guest'
-      ,loginFailed: 'Login failed. Please check your credentials.'
+      ,loginFailed: 'Authentication failed. Please check your credentials.'
     },
     tr: {
       doctorLogin: 'Doktor Girişi',
@@ -34,8 +38,11 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
       email: 'E-posta',
       back: '← Geri',
       login: 'Giriş Yap',
+      register: 'Kayıt Ol',
+      needAccount: 'Hesabınız yok mu? Kayıt Ol',
+      haveAccount: 'Zaten hesabınız var mı? Giriş Yap',
       continueAsGuest: 'Ziyaretçi olarak devam et'
-      ,loginFailed: 'Giriş başarısız. Bilgilerinizi kontrol edin.'
+      ,loginFailed: 'Kimlik doğrulama başarısız. Bilgilerinizi kontrol edin.'
     }
   };
 
@@ -59,7 +66,10 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
         authPayload.email = email;
       }
 
-      const authResult = await authLogin(authPayload);
+      const authPromise = isRegistering 
+        ? import('../services/authService').then(m => m.authRegister(authPayload))
+        : authLogin(authPayload);
+      const authResult = await authPromise;
 
       onLoginSuccess({
         userType,
@@ -155,12 +165,34 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
             >
               {t.back}
             </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onGuestAccess}
+                className="px-4 py-2.5 text-brand-600 bg-white border border-brand-600 rounded-lg hover:bg-brand-50 transition-colors font-medium text-sm"
+              >
+                {t.continueAsGuest}
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+              >
+                {submitting ? `${isRegistering ? t.register : t.login}...` : (isRegistering ? t.register : t.login)}
+              </button>
+            </div>
+          </div>
+          
+          <div className="text-center mt-4">
             <button
-              type="submit"
-              disabled={submitting}
-              className="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+              type="button"
+              onClick={() => {
+                setIsRegistering(!isRegistering);
+                setError('');
+              }}
+              className="text-sm text-brand-600 hover:text-brand-800 font-medium transition-colors"
             >
-              {submitting ? `${t.login}...` : t.login}
+              {isRegistering ? t.haveAccount : t.needAccount}
             </button>
           </div>
         </form>
@@ -169,16 +201,6 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
           <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         )}
 
-        {/* Guest access option */}
-        <div className="mt-6 pt-6 border-t border-gray-100 text-center">
-          <button
-            type="button"
-            onClick={onGuestAccess}
-            className="text-sm text-brand-600 hover:text-brand-800 font-medium transition-colors px-4 py-2 rounded-lg hover:bg-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-200"
-          >
-            {t.continueAsGuest}
-          </button>
-        </div>
       </div>
     </div>
   );

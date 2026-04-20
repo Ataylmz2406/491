@@ -63,6 +63,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('analysis'); // or 'secondOpinion'
   const [secondOpinionSubTab, setSecondOpinionSubTab] = useState('ask'); // 'ask' or 'feed'
   const [selectedTab, setSelectedTab] = useState('analysis'); // 'analysis', 'ask', 'feed'
+  const [pendingTab, setPendingTab] = useState(null); // Tab to redirect after login/guest checkout
 
   // --- Toast ---
   const [toast, setToast] = useState(null);
@@ -102,7 +103,7 @@ function App() {
       dermoscopicExamples: 'Dermoscopic Examples',
       noResult: 'No result yet. Upload images and run diagnosis.',
       noResultPersonal: 'No result yet. Upload images to analyze my skin in personal use.',
-      labelAnalysis: 'Analysis',
+      labelAnalysis: 'Ask AI',
       labelAsk: 'Ask other doctors',
       labelFeed: 'Help other doctors',
       language: 'Language',
@@ -133,7 +134,7 @@ function App() {
       dermoscopicExamples: 'Dermatoskopik Örnekler',
       noResult: 'Sonuç yok. Görüntü yükleyin ve teşhis çalıştırın.',
       noResultPersonal: 'Sonuç yok. Bireysel kullanımda cildimi analiz etmek için görüntü yükleyin.',
-      labelAnalysis: 'Analiz',
+      labelAnalysis: 'AI\'ye Sor',
       labelAsk: 'Diğer doktorlara sor',
       labelFeed: 'Diğer doktorlara yardımcı ol',
       language: 'Dil',
@@ -207,6 +208,10 @@ function App() {
     // Skip login, go straight to the tutorial and then analysis
     setLoggedIn(false);
     clearAccessToken();
+    if (pendingTab) {
+      setSelectedTab(pendingTab);
+      setPendingTab(null);
+    }
     setShowLogin(false);
     setShowTutorial(true);
   };
@@ -217,6 +222,10 @@ function App() {
     }
     setLoginData(data);
     setLoggedIn(true);
+    if (pendingTab) {
+      setSelectedTab(pendingTab);
+      setPendingTab(null);
+    }
     setShowLogin(false);
     setShowTutorial(true);
   };
@@ -475,19 +484,39 @@ function App() {
                 <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                   <button
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'analysis' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    onClick={() => setSelectedTab('analysis')}
+                    onClick={() => {
+                      if (!loggedIn) {
+                        setShowLogin(true);
+                        return;
+                      }
+                      setSelectedTab('analysis');
+                    }}
                   >
                     {t.labelAnalysis}
                   </button>
                   <button
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'ask' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    onClick={() => setSelectedTab('ask')}
+                    onClick={() => {
+                      if (!loggedIn) {
+                        setPendingTab('ask');
+                        setShowLogin(true);
+                        return;
+                      }
+                      setSelectedTab('ask');
+                    }}
                   >
                     {t.labelAsk}
                   </button>
                   <button
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'feed' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    onClick={() => setSelectedTab('feed')}
+                    onClick={() => {
+                      if (!loggedIn) {
+                        setPendingTab('feed');
+                        setShowLogin(true);
+                        return;
+                      }
+                      setSelectedTab('feed');
+                    }}
                   >
                     {t.labelFeed}
                   </button>

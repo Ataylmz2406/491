@@ -3,6 +3,9 @@ import { getAccessToken } from './authService';
 
 async function request(path, options = {}) {
   const token = getAccessToken();
+  if (!token) {
+    throw new Error('AUTH_REQUIRED');
+  }
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       'Content-Type': 'application/json',

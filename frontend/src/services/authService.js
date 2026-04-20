@@ -48,6 +48,13 @@ export async function authLogin(payload) {
   });
 }
 
+export async function authRegister(payload) {
+  return request('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function authMe() {
   const token = getAccessToken();
   if (!token) {

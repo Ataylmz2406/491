@@ -20,7 +20,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
     en: {
       title: 'Second Opinion Feed',
       subtitle: 'Review and comment on shared cases.',
-      search: 'Search by doctor, caption or patient id',
+      search: 'Search by doctor, notes or patient id',
       patientHistory: 'Patient History',
       comments: 'Comments',
       addComment: 'Add Comment',
@@ -37,7 +37,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
     tr: {
       title: 'İkinci Görüş Akışı',
       subtitle: 'Paylaşılan vakaları inceleyip yorum yapın.',
-      search: 'Doktor, açıklama veya hasta id ile ara',
+      search: 'Doktor, not veya hasta id ile ara',
       patientHistory: 'Hasta Geçmişi',
       comments: 'Yorumlar',
       addComment: 'Yorum Ekle',
@@ -137,7 +137,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
       raw.patient_id && { label: 'Patient', value: raw.patient_id },
       raw.lesion_location && { label: 'Location', value: raw.lesion_location },
       raw.diagnosis && { label: 'Diagnosis', value: raw.diagnosis },
-      raw.current_hypothesis && { label: 'Hypothesis', value: raw.current_hypothesis },
+      raw.current_hypothesis && { label: 'AI prediction', value: raw.current_hypothesis },
       raw.age_group && { label: 'Age', value: raw.age_group },
       raw.sex && { label: 'Sex', value: raw.sex },
     ].filter(Boolean);

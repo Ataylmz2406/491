@@ -147,6 +147,19 @@ def init_db():
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject TEXT NOT NULL UNIQUE,
+                user_type TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                hospital TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_diagnoses_patient_date
             ON diagnoses(patient_id, date DESC)
             """
@@ -428,6 +441,13 @@ def _verify_auth_token(authorization: str) -> sqlite3.Row:
         return row
     finally:
         conn.close()
+
+
+def _verify_doctor_token(authorization: str) -> sqlite3.Row:
+    token_row = _verify_auth_token(authorization)
+    if token_row["user_type"] != "doctor":
+        raise HTTPException(status_code=403, detail="Only doctors can perform this action")
+    return token_row
 
 
 def _issue_auth_token(user_type: str, subject: str, display_name: str) -> AuthLoginResponse:
@@ -1035,6 +1055,61 @@ def read_root():
     return {"message": "SUDerm - Dual-Branch Skin Lesion Analysis API (Sabanci University)"}
 
 
+import hashlib
+import sqlite3
+
+def _hash_password(password: str) -> str:
+    # A simple deterministic hash for demonstration; in prod use passlib/bcrypt
+    return hashlib.sha256(f"suderm_salt_{password}".encode('utf-8')).hexdigest()
+
+@app.post("/auth/register", response_model=AuthLoginResponse)
+def auth_register(payload: AuthLoginRequest):
+    user_type = payload.user_type.strip().lower()
+    if user_type not in AUTH_ALLOWED_USER_TYPES:
+        allowed = ", ".join(sorted(AUTH_ALLOWED_USER_TYPES))
+        raise HTTPException(status_code=400, detail=f"Invalid user_type. Allowed values: {allowed}")
+
+    if len(payload.password.strip()) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+
+    if user_type == "doctor":
+        doctor_id = _clean_optional_text(payload.doctor_id, 120)
+        hospital = _clean_optional_text(payload.hospital, 255)
+        if not doctor_id:
+            raise HTTPException(status_code=400, detail="doctor_id is required for doctor registration")
+        subject = doctor_id.lower()
+        display_name = doctor_id
+        if hospital:
+            display_name = f"{doctor_id} @ {hospital}"
+    else:
+        email = _clean_optional_text(payload.email, 255)
+        if not email:
+            raise HTTPException(status_code=400, detail="email is required for registration")
+        subject = email.lower()
+        display_name = email
+        hospital = None
+
+    password_hash = _hash_password(payload.password)
+    now = utc_now_iso()
+
+    conn = get_db_connection()
+    try:
+        try:
+            conn.execute(
+                """
+                INSERT INTO users (subject, user_type, password_hash, display_name, hospital, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (subject, user_type, password_hash, display_name, hospital, now)
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=409, detail="User already exists")
+    finally:
+        conn.close()
+
+    return _issue_auth_token(user_type=user_type, subject=subject, display_name=display_name)
+
 @app.post("/auth/login", response_model=AuthLoginResponse)
 def auth_login(payload: AuthLoginRequest):
     user_type = payload.user_type.strip().lower()
@@ -1057,9 +1132,24 @@ def auth_login(payload: AuthLoginRequest):
     else:
         email = _clean_optional_text(payload.email, 255)
         if not email:
-            raise HTTPException(status_code=400, detail="email is required for this user type")
+            raise HTTPException(status_code=400, detail="email is required for login")
         subject = email.lower()
-        display_name = email
+
+    password_hash = _hash_password(payload.password)
+    
+    conn = get_db_connection()
+    try:
+        user = conn.execute(
+            "SELECT display_name FROM users WHERE subject = ? AND user_type = ? AND password_hash = ?",
+            (subject, user_type, password_hash)
+        ).fetchone()
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid credentials or user not registered")
+            
+        display_name = user["display_name"]
+    finally:
+        conn.close()
 
     return _issue_auth_token(user_type=user_type, subject=subject, display_name=display_name)
 
@@ -1251,7 +1341,7 @@ def create_second_opinion_post(
     payload: SecondOpinionPostCreate,
     authorization: str = Header(default=""),
 ):
-    token_row = _verify_auth_token(authorization)
+    token_row = _verify_doctor_token(authorization)
     requester_display_name = (token_row["display_name"] or "").strip()
     requester_identity = _build_requester_identity(token_row)
 
@@ -1326,7 +1416,7 @@ def create_second_opinion_comment(
     payload: SecondOpinionCommentCreate,
     authorization: str = Header(default=""),
 ):
-    token_row = _verify_auth_token(authorization)
+    token_row = _verify_doctor_token(authorization)
     requester_display_name = (token_row["display_name"] or "").strip()
     requester_identity = _build_requester_identity(token_row)
 
@@ -1386,7 +1476,7 @@ def update_second_opinion_post(
     payload: SecondOpinionPostUpdate,
     authorization: str = Header(default=""),
 ):
-    token_row = _verify_auth_token(authorization)
+    token_row = _verify_doctor_token(authorization)
     requester_identity = _build_requester_identity(token_row)
     requester_display_name = token_row["display_name"]
 
@@ -1438,7 +1528,7 @@ def update_second_opinion_post(
 
 @app.delete("/second-opinion/posts/{post_id}")
 def delete_second_opinion_post(post_id: int, authorization: str = Header(default="")):
-    token_row = _verify_auth_token(authorization)
+    token_row = _verify_doctor_token(authorization)
     requester_identity = _build_requester_identity(token_row)
     requester_display_name = token_row["display_name"]
 

@@ -23,18 +23,18 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       doctorName: 'Doctor Name',
       affiliation: 'Affiliation',
       patientId: 'Patient ID',
-      currentHypothesis: 'Current Hypothesis',
+      currentHypothesis: 'AI prediction',
       uploadImages: 'Upload images',
       chooseImages: 'Choose images',
       resetForm: 'Clear draft',
-      caption: 'Caption',
-      addCaption: 'Add a caption for the images...',
+      caption: 'Notes',
+      addCaption: 'Add notes for the images...',
       captionCount: 'characters',
       postSecondOpinion: 'Post Second Opinion',
       posting: 'Posting...',
       comments: 'Comments',
       addComment: 'Add Comment',
-      noCaption: 'No caption',
+      noCaption: 'No notes',
       noComments: 'No comments yet',
       patientHistory: 'History / Metadata',
       errorPrefix: 'Could not save second opinion:',
@@ -49,18 +49,18 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       doctorName: 'Doktor Adı',
       affiliation: 'Kurum',
       patientId: 'Hasta ID',
-      currentHypothesis: 'Mevcut Hipotez',
+      currentHypothesis: 'Yapay Zeka Tahmini',
       uploadImages: 'Görüntü yükle',
       chooseImages: 'Görüntüleri seç',
       resetForm: 'Taslağı temizle',
-      caption: 'Başlık',
-      addCaption: 'Görüntüler için bir başlık ekleyin...',
+      caption: 'Notlar',
+      addCaption: 'Görüntüler için not ekleyin...',
       captionCount: 'karakter',
       postSecondOpinion: 'İkinci Görüş Gönder',
       posting: 'Gönderiliyor...',
       comments: 'Yorumlar',
       addComment: 'Yorum Ekle',
-      noCaption: 'Başlık yok',
+      noCaption: 'Not yok',
       noComments: 'Henüz yorum yok',
       patientHistory: 'Geçmiş / Metaveri',
       errorPrefix: 'İkinci görüş kaydedilemedi:',
@@ -82,6 +82,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
   const [error, setError] = useState('');
   const [posting, setPosting] = useState(false);
   const [commentDrafts, setCommentDrafts] = useState({});
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
   useEffect(() => {
     const savedDoctorName = window.localStorage.getItem(DOCTOR_NAME_STORAGE_KEY);
@@ -274,7 +275,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       const metadata = buildSecondOpinionMetadata(questionMetadata, patientId, currentHypothesis);
 
       const createdPost = await createSecondOpinionPost({
-        is_anonymous: false,
+        is_anonymous: isAnonymous,
         doctor_name: doctorName.trim() || 'Doctor',
         doctor_affiliation: doctorAffiliation.trim() || null,
         question_text: draft.caption.trim() || 'Second opinion request',
@@ -368,9 +369,10 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <input
           type="text"
-          value={doctorName}
+          value={isAnonymous ? '' : doctorName}
           onChange={(e) => setDoctorName(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          disabled={isAnonymous}
+          className={`w-full rounded-lg border border-gray-300 px-3 py-2 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-900'}`}
           placeholder={t.doctorName}
         />
         <input
@@ -443,14 +445,31 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
         </p>
       </div>
 
-      <div className="flex flex-wrap justify-between gap-3">
-        <button
-          type="button"
-          onClick={resetDraft}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700"
-        >
-          {t.resetForm}
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={resetDraft}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700"
+          >
+            {t.resetForm}
+          </button>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 select-none">
+            <input
+              type="checkbox"
+              checked={isAnonymous}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setIsAnonymous(checked);
+                if (checked) {
+                  setDoctorName('');
+                }
+              }}
+              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+            />
+            <span>Post anonymously</span>
+          </label>
+        </div>
         <button
           type="button"
           onClick={postOpinion}
