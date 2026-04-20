@@ -1,300 +1,545 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, History, Loader2, MessageSquareText, Send, Trash2, Upload } from 'lucide-react';
+import {
+  SECOND_OPINION_DISEASE_OPTIONS,
+  buildSecondOpinionMetadata,
+  createSecondOpinionComment,
+  createSecondOpinionPost,
+  normalizeSecondOpinionPost,
+} from '../services/secondOpinionService';
+
+const DOCTOR_NAME_STORAGE_KEY = 'suderm_second_opinion_doctor_name';
+const DOCTOR_AFFILIATION_STORAGE_KEY = 'suderm_second_opinion_doctor_affiliation';
+const SECOND_OPINION_DRAFT_KEY = 'suderm_second_opinion_ask_draft';
+const CAPTION_MAX = 500;
+const SECOND_OPINION_MAX_IMAGES = 12;
+const MAX_IMAGE_DIMENSION = 1600;
+const IMAGE_QUALITY = 0.82;
 
 export default function SecondOpinion({ language = 'en', onViewHistory, questionMetadata, doctorProfile }) {
   const translations = {
     en: {
+      title: 'Ask for Second Opinion',
       doctorName: 'Doctor Name',
-      affiliation: 'Affiliation / Notes',
+      affiliation: 'Affiliation',
       patientId: 'Patient ID',
       currentHypothesis: 'Current Hypothesis',
-      uploadImages: 'Upload Images',
+      uploadImages: 'Upload images',
       chooseImages: 'Choose images',
-      notSpecified: 'Not specified',
+      resetForm: 'Clear draft',
       caption: 'Caption',
       addCaption: 'Add a caption for the images...',
+      captionCount: 'characters',
       postSecondOpinion: 'Post Second Opinion',
+      posting: 'Posting...',
       comments: 'Comments',
       addComment: 'Add Comment',
       noCaption: 'No caption',
+      noComments: 'No comments yet',
       patientHistory: 'History / Metadata',
-      remove: '✕'
+      errorPrefix: 'Could not save second opinion:',
+      removeImage: 'Remove image',
+      addImageFirst: 'Please add at least one image.',
+      patientRequired: 'Patient ID is required before posting.',
+      maxImages: `You can upload up to ${SECOND_OPINION_MAX_IMAGES} images.`,
+      imageProcessError: 'One or more images could not be processed.',
     },
     tr: {
+      title: 'İkinci Görüş İste',
       doctorName: 'Doktor Adı',
-      affiliation: 'Kurum / Notlar',
+      affiliation: 'Kurum',
       patientId: 'Hasta ID',
       currentHypothesis: 'Mevcut Hipotez',
-      uploadImages: 'Görüntü Yükleyin',
+      uploadImages: 'Görüntü yükle',
       chooseImages: 'Görüntüleri seç',
-      notSpecified: 'Belirtilmedi',
+      resetForm: 'Taslağı temizle',
       caption: 'Başlık',
       addCaption: 'Görüntüler için bir başlık ekleyin...',
+      captionCount: 'karakter',
       postSecondOpinion: 'İkinci Görüş Gönder',
+      posting: 'Gönderiliyor...',
       comments: 'Yorumlar',
       addComment: 'Yorum Ekle',
       noCaption: 'Başlık yok',
+      noComments: 'Henüz yorum yok',
       patientHistory: 'Geçmiş / Metaveri',
-      remove: '✕'
-    }
+      errorPrefix: 'İkinci görüş kaydedilemedi:',
+      removeImage: 'Görüntüyü kaldır',
+      addImageFirst: 'Lütfen en az bir görüntü ekleyin.',
+      patientRequired: 'Göndermeden önce hasta ID gerekli.',
+      maxImages: `En fazla ${SECOND_OPINION_MAX_IMAGES} görüntü yükleyebilirsiniz.`,
+      imageProcessError: 'Bir veya daha fazla görüntü işlenemedi.',
+    },
   };
   const t = translations[language] || translations.en;
 
-  // patient-specific states
   const [patientId, setPatientId] = useState('');
   const [currentHypothesis, setCurrentHypothesis] = useState('');
-  const [posts, setPosts] = useState([]); // array of { id, uploads: [], caption: '', comments: [], posted: false }
+  const [doctorName, setDoctorName] = useState('');
+  const [doctorAffiliation, setDoctorAffiliation] = useState('');
+  const [draft, setDraft] = useState({ uploads: [], caption: '' });
+  const [posts, setPosts] = useState([]);
+  const [error, setError] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [commentDrafts, setCommentDrafts] = useState({});
 
-  const handleFileAdd = (e) => {
-    const files = Array.from(e.target.files);
-    const newItems = files.map((file) => ({
-      file,
-      preview: URL.createObjectURL(file)
-    }));
+  useEffect(() => {
+    const savedDoctorName = window.localStorage.getItem(DOCTOR_NAME_STORAGE_KEY);
+    const savedDoctorAffiliation = window.localStorage.getItem(DOCTOR_AFFILIATION_STORAGE_KEY);
 
-    setPosts((prev) => {
-      const lastPost = prev[prev.length - 1];
-      if (lastPost && !lastPost.posted) {
-        // Add to existing unposted post
-        const updatedPosts = [...prev];
-        updatedPosts[updatedPosts.length - 1].uploads = [...lastPost.uploads, ...newItems];
-        return updatedPosts;
-      } else {
-        // Create new post
-        const newPost = {
-          id: Date.now(),
-          uploads: newItems,
-          caption: '',
-          comments: [],
-          posted: false
-        };
-        return [...prev, newPost];
+    setDoctorName(savedDoctorName ?? doctorProfile?.name ?? '');
+    setDoctorAffiliation(savedDoctorAffiliation ?? doctorProfile?.info ?? '');
+  }, [doctorProfile?.name, doctorProfile?.info]);
+
+  useEffect(() => {
+    const savedDraft = window.localStorage.getItem(SECOND_OPINION_DRAFT_KEY);
+    if (!savedDraft) return;
+
+    try {
+      const parsed = JSON.parse(savedDraft);
+      setPatientId(parsed.patientId || '');
+      setCurrentHypothesis(parsed.currentHypothesis || '');
+      setDraft((prev) => ({ ...prev, caption: parsed.caption || '' }));
+    } catch {
+      // ignore malformed local draft
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(DOCTOR_NAME_STORAGE_KEY, doctorName);
+  }, [doctorName]);
+
+  useEffect(() => {
+    window.localStorage.setItem(DOCTOR_AFFILIATION_STORAGE_KEY, doctorAffiliation);
+  }, [doctorAffiliation]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      SECOND_OPINION_DRAFT_KEY,
+      JSON.stringify({
+        patientId,
+        currentHypothesis,
+        caption: draft.caption,
+      })
+    );
+  }, [patientId, currentHypothesis, draft.caption]);
+
+  useEffect(() => {
+    return () => {
+      draft.uploads.forEach((item) => URL.revokeObjectURL(item.preview));
+    };
+  }, [draft.uploads]);
+
+  const compressImageFile = (file) =>
+    new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/')) {
+        reject(new Error('Only image files are supported'));
+        return;
       }
+
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+
+        const sourceWidth = img.naturalWidth || img.width;
+        const sourceHeight = img.naturalHeight || img.height;
+        const maxSide = Math.max(sourceWidth, sourceHeight);
+        const scale = maxSide > MAX_IMAGE_DIMENSION ? MAX_IMAGE_DIMENSION / maxSide : 1;
+
+        const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+        const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Image processing context could not be created'));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Image compression failed'));
+              return;
+            }
+
+            const compressedFile = new File(
+              [blob],
+              file.name.replace(/\.[^.]+$/, '.jpg'),
+              { type: 'image/jpeg' }
+            );
+            resolve(compressedFile);
+          },
+          'image/jpeg',
+          IMAGE_QUALITY
+        );
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Image decoding failed'));
+      };
+
+      img.src = objectUrl;
+    });
+
+  const fileToDataUrl = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.readAsDataURL(file);
+    });
+
+  const handleFileAdd = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const availableSlots = Math.max(0, SECOND_OPINION_MAX_IMAGES - draft.uploads.length);
+    if (availableSlots === 0) {
+      setError(t.maxImages);
+      e.target.value = '';
+      return;
+    }
+
+    const selectedFiles = files.slice(0, availableSlots);
+
+    setError('');
+    try {
+      const compressedFiles = await Promise.all(selectedFiles.map((file) => compressImageFile(file)));
+      const newItems = compressedFiles.map((file) => ({
+        file,
+        preview: URL.createObjectURL(file),
+      }));
+
+      setDraft((prev) => ({
+        ...prev,
+        uploads: [...prev.uploads, ...newItems],
+      }));
+
+      if (files.length > selectedFiles.length) {
+        setError(t.maxImages);
+      }
+    } catch (err) {
+      setError(err.message || t.imageProcessError);
+    }
+
+    e.target.value = '';
+  };
+
+  const removeUpload = (idx) => {
+    setDraft((prev) => {
+      const removing = prev.uploads[idx];
+      if (removing) {
+        URL.revokeObjectURL(removing.preview);
+      }
+      return {
+        ...prev,
+        uploads: prev.uploads.filter((_, i) => i !== idx),
+      };
     });
   };
 
-  const updateCaption = (postId, text) => {
-    setPosts((prev) => prev.map(post => post.id === postId ? { ...post, caption: text } : post));
+  const resetDraft = () => {
+    draft.uploads.forEach((item) => URL.revokeObjectURL(item.preview));
+    setPatientId('');
+    setCurrentHypothesis('');
+    setDraft({ uploads: [], caption: '' });
+    setError('');
   };
 
-  const addComment = (postId, comment) => {
-    if (comment.trim()) {
-      setPosts((prev) => prev.map(post => post.id === postId ? { ...post, comments: [...post.comments, comment.trim()] } : post));
+  const postOpinion = async () => {
+    if (!patientId.trim()) {
+      setError(t.patientRequired);
+      return;
+    }
+
+    if (draft.uploads.length === 0) {
+      setError(t.addImageFirst);
+      return;
+    }
+
+    setError('');
+    setPosting(true);
+
+    try {
+      const imageUrls = await Promise.all(draft.uploads.map((item) => fileToDataUrl(item.file)));
+      const metadata = buildSecondOpinionMetadata(questionMetadata, patientId, currentHypothesis);
+
+      const createdPost = await createSecondOpinionPost({
+        is_anonymous: false,
+        doctor_name: doctorName.trim() || 'Doctor',
+        doctor_affiliation: doctorAffiliation.trim() || null,
+        question_text: draft.caption.trim() || 'Second opinion request',
+        image_urls: imageUrls,
+        ...metadata,
+      });
+
+      const normalizedPost = normalizeSecondOpinionPost(createdPost);
+      setPosts((prev) => [normalizedPost, ...prev]);
+      resetDraft();
+    } catch (err) {
+      setError(`${t.errorPrefix} ${err.message || 'Unknown error'}`);
+    } finally {
+      setPosting(false);
     }
   };
 
-  const removeComment = (postId, idx) => {
-    setPosts((prev) => prev.map(post => post.id === postId ? { ...post, comments: post.comments.filter((_, i) => i !== idx) } : post));
-  };
+  const addComment = async (postId, comment) => {
+    const trimmedComment = comment.trim();
+    if (!trimmedComment) return;
 
-  const postOpinion = (postId) => {
-    setPosts((prev) => prev.map((post) => {
-      if (post.id !== postId) return post;
+    setError('');
 
-      const metadataParts = [];
-      if (questionMetadata?.location) metadataParts.push(`Location: ${questionMetadata.location}`);
-      if (questionMetadata?.diagnosis) metadataParts.push(`Diagnosis: ${questionMetadata.diagnosis}`);
-      if (questionMetadata?.ageGroup) metadataParts.push(`Age Group: ${questionMetadata.ageGroup}`);
-      if (questionMetadata?.sex) metadataParts.push(`Sex: ${questionMetadata.sex}`);
-      if (questionMetadata?.skinTone) metadataParts.push(`Skin Tone: ${questionMetadata.skinTone}`);
-      if (patientId) metadataParts.push(`Patient ID: ${patientId}`);
-      if (currentHypothesis) metadataParts.push(`Hypothesis: ${currentHypothesis}`);
+    try {
+      const createdComment = await createSecondOpinionComment(postId, {
+        is_anonymous: false,
+        author_name: doctorName.trim() || 'Doctor',
+        comment_text: trimmedComment,
+      });
 
-      const metadataText = metadataParts.join(' | ');
-      const newCaption = [post.caption, metadataText].filter(Boolean).join('\n\n');
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                comments: [
+                  ...post.comments,
+                  {
+                    id: createdComment.id,
+                    text: createdComment.comment_text,
+                    author: createdComment.author_name,
+                  },
+                ],
+              }
+            : post
+        )
+      );
 
-      return { ...post, posted: true, caption: newCaption };
-    }));
+        setCommentDrafts((prev) => ({
+          ...prev,
+          [postId]: '',
+        }));
+    } catch (err) {
+      setError(`${t.errorPrefix} ${err.message || 'Unknown error'}`);
+    }
   };
 
   const viewHistory = () => {
+    if (!onViewHistory) return;
+
     onViewHistory({
       ...questionMetadata,
       patientId,
-      currentHypothesis
+      currentHypothesis,
     });
   };
 
-  const removeUpload = (postId, idx) => {
-    setPosts((prev) => prev.map(post => post.id === postId ? { ...post, uploads: post.uploads.filter((_, i) => i !== idx) } : post));
-  };
+  const captionCount = draft.caption.length;
+  const canPost = patientId.trim() && draft.uploads.length > 0 && !posting;
+  const hypothesisLabel = useMemo(
+    () => SECOND_OPINION_DISEASE_OPTIONS.find((x) => x.value === currentHypothesis)?.label || '-',
+    [currentHypothesis]
+  );
 
   return (
-    <div className="bg-white border border-gray-200 shadow-xl rounded-2xl p-6 flex flex-col gap-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t.doctorName}</label>
-          <input
-            type="text"
-            value={doctorProfile?.name || ''}
-            readOnly
-            className="w-full px-3 py-2 border rounded-md bg-gray-100"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t.affiliation}</label>
-          <input
-            type="text"
-            value={doctorProfile?.info || ''}
-            readOnly
-            className="w-full px-3 py-2 border rounded-md bg-gray-100"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t.patientId}</label>
-          <input
-            type="text"
-            value={patientId}
-            onChange={(e) => setPatientId(e.target.value)}
-            className="w-full px-3 py-2 border rounded-md"
-            placeholder={t.patientId}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t.currentHypothesis}</label>
-          <select
-            value={currentHypothesis}
-            onChange={(e) => setCurrentHypothesis(e.target.value)}
-            className="w-full px-3 py-2 border rounded-md"
+    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-900">{t.title}</h2>
+        {onViewHistory && (
+          <button
+            type="button"
+            onClick={viewHistory}
+            className="inline-flex items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-700"
           >
-            <option value="">Not specified</option>
-            <option value="AKIEC">Actinic keratosis / intraepidermal carcinoma</option>
-            <option value="BCC">Basal cell carcinoma</option>
-            <option value="BEN_OTH">Other benign proliferations, including collision tumors</option>
-            <option value="BKL">Benign keratinocytic lesion</option>
-            <option value="DF">Dermatofibroma</option>
-            <option value="INF">Inflammatory and infectious conditions</option>
-            <option value="MAL_OTH">Other malignant proliferations, including collision tumors</option>
-            <option value="MEL">Melanoma</option>
-            <option value="NV">Melanocytic nevus</option>
-            <option value="SCCKA">Squamous cell carcinoma / keratoacanthoma</option>
-            <option value="VASC">Vascular lesions and hemorrhage</option>
-          </select>
+            <History className="h-4 w-4" />
+            {t.patientHistory}
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <input
+          type="text"
+          value={doctorName}
+          onChange={(e) => setDoctorName(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          placeholder={t.doctorName}
+        />
+        <input
+          type="text"
+          value={doctorAffiliation}
+          onChange={(e) => setDoctorAffiliation(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          placeholder={t.affiliation}
+        />
+        <input
+          type="text"
+          value={patientId}
+          onChange={(e) => setPatientId(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          placeholder={t.patientId}
+        />
+        <select
+          value={currentHypothesis}
+          onChange={(e) => setCurrentHypothesis(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+        >
+          {SECOND_OPINION_DISEASE_OPTIONS.map((option) => (
+            <option key={option.value || 'none'} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="rounded-lg border border-dashed border-gray-300 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white">
+            <Upload className="h-4 w-4" />
+            {t.chooseImages}
+            <input type="file" multiple accept="image/*" onChange={handleFileAdd} className="hidden" />
+          </label>
+          <span className="text-sm text-gray-500">{draft.uploads.length}/{SECOND_OPINION_MAX_IMAGES} file(s)</span>
         </div>
-      </div>
 
-      <div className="mt-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">{t.uploadImages}</label>
-        <label className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-full cursor-pointer">
-          {t.chooseImages}
-          <input type="file" multiple accept="image/*" onChange={handleFileAdd} className="hidden" />
-        </label>
-      </div>
-
-      {posts.map((post) => (
-        <div key={post.id} className="border p-4 rounded-lg">
-          {patientId && (
-            <div className="flex justify-end mb-4">
-              <button
-                onClick={viewHistory}
-                className="text-sm text-white bg-teal-600 hover:bg-teal-700 px-3 py-1 rounded"
-              >
-                {t.patientHistory}
-              </button>
-            </div>
-          )}
-          {post.uploads.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4 auto-rows-fr">
-              {post.uploads.map((item, idx) => (
-                <div key={idx} className="relative aspect-square">
-                  {!post.posted && (
-                    <button
-                      className="absolute top-1 right-1 text-red-500 hover:text-red-700 bg-white rounded-full p-1 z-10"
-                      onClick={() => removeUpload(post.id, idx)}
-                    >
-                      ✕
-                    </button>
-                  )}
-                  <img
-                    src={item.preview}
-                    alt={`upload ${idx + 1}`}
-                    className="w-full h-full object-cover rounded-lg"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!post.posted && (
-            <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.caption}</label>
-                  <textarea
-                    value={post.caption}
-                    onChange={(e) => updateCaption(post.id, e.target.value)}
-                    placeholder={t.addCaption}
-                    className="w-full px-3 py-2 border rounded-md"
-                    rows={2}
-                  />
-                </div>
-              )}
-
-              {post.posted && (
-                <div className="mb-4">
-                  <p className="text-sm font-medium text-gray-700">{t.caption}:</p>
-                  <p className="text-gray-800">{post.caption || t.noCaption}</p>
-                </div>
-              )}
-
-          {!post.posted && (
-            <div className="flex justify-end mb-4">
-              <button
-                onClick={() => postOpinion(post.id)}
-                disabled={!patientId.trim() || post.uploads.length === 0}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {t.postSecondOpinion}
-              </button>
-            </div>
-          )}
-
-          {post.posted && (
-            <div className="border-t pt-4">
-              <h3 className="text-lg font-medium mb-2">{t.comments}</h3>
-              <div className="flex gap-2 mb-4">
-                <textarea
-                  placeholder={t.addComment}
-                  className="flex-1 px-3 py-2 border rounded-md"
-                  rows={2}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      addComment(post.id, e.target.value);
-                      e.target.value = '';
-                    }
-                  }}
-                />
+        {draft.uploads.length > 0 && (
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+            {draft.uploads.map((item, idx) => (
+              <div key={idx} className="relative aspect-square overflow-hidden rounded-lg border border-gray-200">
                 <button
-                  onClick={(e) => {
-                    const textarea = e.target.previousSibling;
-                    addComment(post.id, textarea.value);
-                    textarea.value = '';
-                  }}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md"
+                  type="button"
+                  title={t.removeImage}
+                  onClick={() => removeUpload(idx)}
+                  className="absolute right-1 top-1 z-10 rounded-full bg-white p-1 text-red-600"
                 >
-                  {t.addComment}
+                  <Trash2 className="h-4 w-4" />
                 </button>
+                <img src={item.preview} alt={`upload ${idx + 1}`} className="h-full w-full object-cover" />
               </div>
-              {post.comments.length > 0 && (
-                <div className="space-y-2">
-                  {post.comments.map((comment, idx) => (
-                    <div key={idx} className="flex justify-between items-start bg-gray-50 p-2 rounded">
-                      <p className="flex-1">{comment}</p>
-                      <button
-                        onClick={() => removeComment(post.id, idx)}
-                        className="text-red-500 hover:text-red-700 ml-2"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <textarea
+          value={draft.caption}
+          onChange={(e) => setDraft((prev) => ({ ...prev, caption: e.target.value.slice(0, CAPTION_MAX) }))}
+          placeholder={t.addCaption}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          rows={4}
+          maxLength={CAPTION_MAX}
+        />
+        <p className="mt-1 text-right text-xs text-gray-500">
+          {captionCount}/{CAPTION_MAX} {t.captionCount}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap justify-between gap-3">
+        <button
+          type="button"
+          onClick={resetDraft}
+          className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700"
+        >
+          {t.resetForm}
+        </button>
+        <button
+          type="button"
+          onClick={postOpinion}
+          disabled={!canPost}
+          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+        >
+          {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {posting ? t.posting : t.postSecondOpinion}
+        </button>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <AlertCircle className="mt-0.5 h-4 w-4" />
+          <span>{error}</span>
         </div>
-      ))}
+      )}
+
+      {posts.length > 0 && (
+        <div className="space-y-4 border-t border-gray-200 pt-4">
+          {posts.map((post) => {
+            const postCommentDraft = commentDrafts[post.id] ?? '';
+
+            return (
+              <div key={post.id} className="rounded-lg border border-gray-200 p-4 space-y-3">
+                <p className="whitespace-pre-line text-sm text-gray-800">{post.caption || t.noCaption}</p>
+                {post.uploads.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                    {post.uploads.map((item, idx) => (
+                      <img
+                        key={idx}
+                        src={item.preview}
+                        alt={`post ${post.id} ${idx + 1}`}
+                        className="aspect-square w-full rounded-md object-cover"
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <div className="border-t border-gray-100 pt-3">
+                  <h4 className="mb-2 text-sm font-semibold text-gray-800">{t.comments}</h4>
+                  {post.comments.length > 0 ? (
+                    <div className="mb-3 space-y-2">
+                      {post.comments.map((comment) => (
+                        <div key={comment.id} className="rounded-md bg-gray-50 px-3 py-2 text-sm">
+                          <span className="font-medium text-gray-700">{comment.author}: </span>
+                          <span className="text-gray-700">{comment.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mb-3 text-sm text-gray-500">{t.noComments}</p>
+                  )}
+
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={postCommentDraft}
+                      onChange={(e) =>
+                        setCommentDrafts((prev) => ({
+                          ...prev,
+                          [post.id]: e.target.value,
+                        }))
+                      }
+                      placeholder={t.addComment}
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addComment(post.id, postCommentDraft);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addComment(post.id, postCommentDraft)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white"
+                    >
+                      <MessageSquareText className="h-4 w-4" />
+                      {t.addComment}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="text-xs text-gray-500">{t.currentHypothesis}: {hypothesisLabel}</div>
     </div>
   );
 }

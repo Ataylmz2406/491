@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { authLogin } from '../services/authService';
 
 export default function Login({ language = 'en', userType, onLoginSuccess, onBack, onGuestAccess }) {
   // fields
@@ -6,6 +7,8 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
   const [password, setPassword] = useState('');
   const [hospital, setHospital] = useState('');
   const [doctorId, setDoctorId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const translations = {
     en: {
@@ -19,6 +22,7 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
       back: '← Back',
       login: 'Log In',
       continueAsGuest: 'Continue as Guest'
+      ,loginFailed: 'Login failed. Please check your credentials.'
     },
     tr: {
       doctorLogin: 'Doktor Girişi',
@@ -31,26 +35,47 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
       back: '← Geri',
       login: 'Giriş Yap',
       continueAsGuest: 'Ziyaretçi olarak devam et'
+      ,loginFailed: 'Giriş başarısız. Bilgilerinizi kontrol edin.'
     }
   };
 
   const t = translations[language] || translations.en;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const payload = { userType };
+    setError('');
+    setSubmitting(true);
 
-    if (userType === 'doctor') {
-      payload.hospital = hospital;
-      payload.doctorId = doctorId;
-      payload.password = password;
-    } else if (userType === 'researcher' || userType === 'personal') {
-      payload.email = email;
-      payload.password = password;
+    try {
+      const authPayload = {
+        user_type: userType,
+        password,
+      };
+
+      if (userType === 'doctor') {
+        authPayload.hospital = hospital;
+        authPayload.doctor_id = doctorId;
+      } else if (userType === 'researcher' || userType === 'personal') {
+        authPayload.email = email;
+      }
+
+      const authResult = await authLogin(authPayload);
+
+      onLoginSuccess({
+        userType,
+        email,
+        hospital,
+        doctorId,
+        accessToken: authResult.access_token,
+        tokenType: authResult.token_type,
+        expiresAt: authResult.expires_at,
+        displayName: authResult.display_name,
+      });
+    } catch (err) {
+      setError(err.message || t.loginFailed);
+    } finally {
+      setSubmitting(false);
     }
-
-    // In a real app you'd call an API here. For now we just notify parent.
-    onLoginSuccess(payload);
   };
 
   return (
@@ -132,12 +157,17 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
             </button>
             <button
               type="submit"
+              disabled={submitting}
               className="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
             >
-              {t.login}
+              {submitting ? `${t.login}...` : t.login}
             </button>
           </div>
         </form>
+
+        {error && (
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        )}
 
         {/* Guest access option */}
         <div className="mt-6 pt-6 border-t border-gray-100 text-center">

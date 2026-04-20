@@ -87,7 +87,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
 
   void handleFileAdd() async {
     try {
-      final List<XFile>? images = await picker.pickMultiImage();
+      final List<XFile> images = await picker.pickMultiImage();
       if (images != null && images.isNotEmpty) {
         OpinionPost? lastUnpostedPost;
         int lastIndex = -1;
@@ -330,7 +330,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
           ),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: currentHypothesis.isEmpty ? null : currentHypothesis,
+            initialValue: currentHypothesis.isEmpty ? null : currentHypothesis,
             decoration: InputDecoration(
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               border: OutlineInputBorder(
@@ -352,7 +352,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
                   value: entry.key,
                   child: Text(entry.value),
                 );
-              }).toList(),
+              }),
             ],
             onChanged: (value) {
               setState(() {
@@ -623,7 +623,7 @@ class _SecondOpinionPageState extends State<SecondOpinionPage> {
                     ],
                   ),
                 );
-              }).toList(),
+              }),
               const SizedBox(height: 12),
             ],
           ),

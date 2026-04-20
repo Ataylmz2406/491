@@ -298,7 +298,7 @@ Top Differential: ${result?['details']?['top_class']}''';
     IconData? icon,
   }) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF0D9488)) : null,
