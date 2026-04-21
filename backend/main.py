@@ -160,6 +160,23 @@ def init_db():
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS mil10k_labels (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                image_path TEXT NOT NULL,
+                image_folder TEXT NOT NULL,
+                image_filename TEXT NOT NULL,
+                classification TEXT NOT NULL,
+                confidence_score INTEGER NOT NULL,
+                labeled_by_identity TEXT NOT NULL,
+                doctor_name TEXT,
+                doctor_affiliation TEXT,
+                labeled_at TEXT NOT NULL,
+                UNIQUE(image_path, labeled_by_identity)
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_diagnoses_patient_date
             ON diagnoses(patient_id, date DESC)
             """
@@ -188,6 +205,18 @@ def init_db():
             ON auth_tokens(expires_at)
             """
         )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_mil10k_labels_image_path
+            ON mil10k_labels(image_path)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_mil10k_labels_folder
+            ON mil10k_labels(image_folder)
+            """
+        )
         conn.commit()
     finally:
         conn.close()
@@ -195,6 +224,7 @@ def init_db():
     ensure_second_opinion_schema_columns()
     ensure_second_opinion_strict_constraints()
     ensure_auth_token_schema_columns()
+    ensure_mil10k_labels_schema()
 
 
 class DiagnosisIn(BaseModel):
@@ -302,6 +332,32 @@ class AuthMeResponse(BaseModel):
     user_type: str
     display_name: str
     expires_at: str
+
+
+class ImageLabelCreate(BaseModel):
+    image_path: str
+    image_folder: str
+    image_filename: str
+    classification: str
+    confidence_score: int
+
+
+class ImageLabelOut(BaseModel):
+    id: int
+    image_path: str
+    image_folder: str
+    image_filename: str
+    classification: str
+    confidence_score: int
+    doctor_name: str
+    doctor_affiliation: str | None = None
+    labeled_at: str
+
+
+class MilImageInfo(BaseModel):
+    folder: str
+    filename: str
+    path: str
 
 
 def _clean_optional_text(value: str | None, max_len: int | None = None) -> str | None:
@@ -923,6 +979,123 @@ def ensure_auth_token_schema_columns():
             """
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def _has_mil10k_composite_unique_constraint(conn: sqlite3.Connection) -> bool:
+    row = conn.execute(
+        """
+        SELECT sql
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'mil10k_labels'
+        """
+    ).fetchone()
+    table_sql = _normalize_sql(row["sql"] if row else "")
+    return "unique(image_path, labeled_by_identity)" in table_sql
+
+
+def ensure_mil10k_labels_schema():
+    """Rebuilds mil10k_labels for doctor-bound labeling when legacy schema is detected."""
+    conn = get_db_connection()
+    try:
+        columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(mil10k_labels)").fetchall()
+        }
+
+        if "labeled_by_identity" not in columns:
+            conn.execute("ALTER TABLE mil10k_labels ADD COLUMN labeled_by_identity TEXT")
+
+        conn.execute(
+            """
+            UPDATE mil10k_labels
+            SET labeled_by_identity = 'legacy:unknown'
+            WHERE labeled_by_identity IS NULL OR trim(labeled_by_identity) = ''
+            """
+        )
+        conn.commit()
+
+        if _has_mil10k_composite_unique_constraint(conn):
+            return
+
+        conn.execute("BEGIN")
+
+        conn.execute(
+            """
+            CREATE TABLE mil10k_labels_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                image_path TEXT NOT NULL,
+                image_folder TEXT NOT NULL,
+                image_filename TEXT NOT NULL,
+                classification TEXT NOT NULL,
+                confidence_score INTEGER NOT NULL,
+                labeled_by_identity TEXT NOT NULL,
+                doctor_name TEXT,
+                doctor_affiliation TEXT,
+                labeled_at TEXT NOT NULL,
+                UNIQUE(image_path, labeled_by_identity)
+            )
+            """
+        )
+
+        # Deduplicate legacy rows by selecting the newest label per (image_path, identity).
+        conn.execute(
+            """
+            INSERT INTO mil10k_labels_new (
+                image_path, image_folder, image_filename, classification,
+                confidence_score, labeled_by_identity, doctor_name, doctor_affiliation,
+                labeled_at
+            )
+            SELECT
+                src.image_path,
+                src.image_folder,
+                src.image_filename,
+                src.classification,
+                src.confidence_score,
+                src.labeled_by_identity,
+                src.doctor_name,
+                src.doctor_affiliation,
+                src.labeled_at
+            FROM mil10k_labels src
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM mil10k_labels newer
+                WHERE newer.image_path = src.image_path
+                  AND newer.labeled_by_identity = src.labeled_by_identity
+                  AND (
+                      newer.labeled_at > src.labeled_at
+                      OR (newer.labeled_at = src.labeled_at AND newer.id > src.id)
+                  )
+            )
+            """
+        )
+
+        conn.execute("DROP TABLE mil10k_labels")
+        conn.execute("ALTER TABLE mil10k_labels_new RENAME TO mil10k_labels")
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_mil10k_labels_image_path
+            ON mil10k_labels(image_path)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_mil10k_labels_folder
+            ON mil10k_labels(image_folder)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_mil10k_labels_identity
+            ON mil10k_labels(labeled_by_identity)
+            """
+        )
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
@@ -1631,3 +1804,349 @@ async def predict(
             torch.mps.empty_cache()
         print(f"Prediction Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- IMAGE LABELING ENDPOINTS ---
+MIL10K_DATASET_PATH = os.path.join(BASE_DIR, "..", "Mil10K images")
+
+
+def get_all_mil10k_images() -> list[MilImageInfo]:
+    """Scan the Mil10K dataset folder and return all image paths."""
+    images = []
+    
+    if not os.path.exists(MIL10K_DATASET_PATH):
+        print(f"Warning: Mil10K dataset path not found: {MIL10K_DATASET_PATH}")
+        return images
+    
+    # Common image extensions
+    image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp'}
+    
+    try:
+        for folder in os.listdir(MIL10K_DATASET_PATH):
+            folder_path = os.path.join(MIL10K_DATASET_PATH, folder)
+            
+            # Skip if not a directory
+            if not os.path.isdir(folder_path):
+                continue
+            
+            # Scan for image files in the folder
+            for filename in os.listdir(folder_path):
+                file_path = os.path.join(folder_path, filename)
+                
+                # Skip if not a file or if it's not an image
+                if not os.path.isfile(file_path):
+                    continue
+                
+                if not any(filename.lower().endswith(ext) for ext in image_extensions):
+                    continue
+                
+                # Create relative path for storage
+                relative_path = os.path.join(folder, filename).replace('\\', '/')
+                
+                images.append(MilImageInfo(
+                    folder=folder,
+                    filename=filename,
+                    path=relative_path
+                ))
+    except Exception as e:
+        print(f"Error scanning Mil10K dataset: {e}")
+    
+    return images
+
+
+@app.get("/mil10k/images", response_model=list[MilImageInfo])
+def get_mil10k_images(authorization: str = Header(default="")):
+    """Get list of all images in the Mil10K dataset."""
+    _verify_doctor_token(authorization)
+    images = get_all_mil10k_images()
+    return images
+
+
+@app.get("/mil10k/image-data/{folder}/{filename}")
+async def get_mil10k_image_data(folder: str, filename: str, authorization: str = Header(default="")):
+    """Get a specific image from the Mil10K dataset as base64 encoded data."""
+    _verify_doctor_token(authorization)
+    # Validate folder and filename to prevent directory traversal
+    if ".." in folder or ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid image path")
+    
+    file_path = os.path.join(MIL10K_DATASET_PATH, folder, filename)
+    
+    # Verify the file exists and is within the Mil10K folder
+    real_path = os.path.abspath(file_path)
+    real_dataset_path = os.path.abspath(MIL10K_DATASET_PATH)
+    
+    if not real_path.startswith(real_dataset_path):
+        raise HTTPException(status_code=400, detail="Invalid image path")
+    
+    if not os.path.isfile(real_path):
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    try:
+        with open(real_path, 'rb') as f:
+            image_bytes = f.read()
+        
+        # Determine image type
+        ext = os.path.splitext(filename)[1].lower()
+        mime_type_map = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.bmp': 'image/bmp',
+            '.tiff': 'image/tiff',
+            '.webp': 'image/webp'
+        }
+        mime_type = mime_type_map.get(ext, 'image/jpeg')
+        
+        # Encode to base64
+        b64_data = base64.b64encode(image_bytes).decode('utf-8')
+        
+        return {
+            "data": b64_data,
+            "mime_type": mime_type,
+            "folder": folder,
+            "filename": filename
+        }
+    except Exception as e:
+        print(f"Error reading image: {e}")
+        raise HTTPException(status_code=500, detail="Could not read image")
+
+
+@app.post("/mil10k/labels", response_model=ImageLabelOut)
+def create_mil10k_label(
+    payload: ImageLabelCreate,
+    authorization: str = Header(default=""),
+):
+    """Save a label for a Mil10K image."""
+    token_row = _verify_doctor_token(authorization)
+    doctor_name = (token_row["display_name"] or "").strip()
+    doctor_identity = _build_requester_identity(token_row)
+    doctor_affiliation = ""
+    
+    # Get doctor affiliation from users table if available
+    conn = get_db_connection()
+    try:
+        user = conn.execute(
+            "SELECT hospital FROM users WHERE subject = ?",
+            (token_row["subject"],)
+        ).fetchone()
+        if user and user["hospital"]:
+            doctor_affiliation = user["hospital"]
+    finally:
+        conn.close()
+    
+    # Validate classification
+    if payload.classification not in CLASS_NAMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid classification. Allowed: {', '.join(CLASS_NAMES)}"
+        )
+    
+    # Validate confidence score
+    if not (1 <= payload.confidence_score <= 5):
+        raise HTTPException(status_code=400, detail="Confidence score must be between 1 and 5")
+    
+    # Insert label into database
+    conn = get_db_connection()
+    try:
+        now = utc_now_iso()
+        existing_row = conn.execute(
+            """
+            SELECT id
+            FROM mil10k_labels
+            WHERE image_path = ? AND labeled_by_identity = ?
+            """,
+            (payload.image_path, doctor_identity),
+        ).fetchone()
+
+        if existing_row:
+            conn.execute(
+                """
+                UPDATE mil10k_labels
+                SET image_folder = ?,
+                    image_filename = ?,
+                    classification = ?,
+                    confidence_score = ?,
+                    doctor_name = ?,
+                    doctor_affiliation = ?,
+                    labeled_at = ?
+                WHERE id = ?
+                """,
+                (
+                    payload.image_folder,
+                    payload.image_filename,
+                    payload.classification,
+                    payload.confidence_score,
+                    doctor_name,
+                    doctor_affiliation,
+                    now,
+                    existing_row["id"],
+                )
+            )
+            label_id = existing_row["id"]
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO mil10k_labels (
+                    image_path, image_folder, image_filename, classification,
+                    confidence_score, labeled_by_identity, doctor_name, doctor_affiliation,
+                    labeled_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload.image_path,
+                    payload.image_folder,
+                    payload.image_filename,
+                    payload.classification,
+                    payload.confidence_score,
+                    doctor_identity,
+                    doctor_name,
+                    doctor_affiliation,
+                    now
+                )
+            )
+            label_id = cursor.lastrowid
+
+        conn.commit()
+
+        row = conn.execute(
+            """
+            SELECT id, image_path, image_folder, image_filename, classification,
+                   confidence_score, doctor_name, doctor_affiliation, labeled_at
+            FROM mil10k_labels
+            WHERE id = ?
+            """,
+            (label_id,),
+        ).fetchone()
+        
+        # Return the created label
+        return ImageLabelOut(
+            id=row["id"],
+            image_path=row["image_path"],
+            image_folder=row["image_folder"],
+            image_filename=row["image_filename"],
+            classification=row["classification"],
+            confidence_score=row["confidence_score"],
+            doctor_name=row["doctor_name"] or "",
+            doctor_affiliation=row["doctor_affiliation"],
+            labeled_at=row["labeled_at"],
+        )
+    except Exception as e:
+        print(f"Error creating label: {e}")
+        raise HTTPException(status_code=500, detail="Could not save label")
+    finally:
+        conn.close()
+
+
+@app.get("/mil10k/labels/{folder}/{filename}")
+def get_mil10k_label(folder: str, filename: str, authorization: str = Header(default="")):
+    """Get the current doctor's label for a specific Mil10K image."""
+    token_row = _verify_doctor_token(authorization)
+    doctor_identity = _build_requester_identity(token_row)
+
+    if ".." in folder or ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid image path")
+    
+    image_path = f"{folder}/{filename}"
+    
+    conn = get_db_connection()
+    try:
+        label = conn.execute(
+            """
+            SELECT *
+            FROM mil10k_labels
+            WHERE image_path = ? AND labeled_by_identity = ?
+            """,
+            (image_path, doctor_identity),
+        ).fetchone()
+        
+        if not label:
+            return None  # No label yet
+        
+        return ImageLabelOut(
+            id=label["id"],
+            image_path=label["image_path"],
+            image_folder=label["image_folder"],
+            image_filename=label["image_filename"],
+            classification=label["classification"],
+            confidence_score=label["confidence_score"],
+            doctor_name=label["doctor_name"],
+            doctor_affiliation=label["doctor_affiliation"],
+            labeled_at=label["labeled_at"]
+        )
+    except Exception as e:
+        print(f"Error getting label: {e}")
+        raise HTTPException(status_code=500, detail="Could not get label")
+    finally:
+        conn.close()
+
+
+@app.get("/mil10k/labels-stats")
+def get_mil10k_labels_stats(authorization: str = Header(default="")):
+    """Get statistics for the current doctor, plus global aggregates."""
+    token_row = _verify_doctor_token(authorization)
+    doctor_identity = _build_requester_identity(token_row)
+
+    conn = get_db_connection()
+    try:
+        total_images = len(get_all_mil10k_images())
+        
+        # Doctor-specific progress
+        my_labeled_count = conn.execute(
+            """
+            SELECT COUNT(DISTINCT image_path) as count
+            FROM mil10k_labels
+            WHERE labeled_by_identity = ?
+            """,
+            (doctor_identity,),
+        ).fetchone()["count"]
+        
+        my_distribution = conn.execute(
+            """
+            SELECT classification, COUNT(*) as count
+            FROM mil10k_labels
+            WHERE labeled_by_identity = ?
+            GROUP BY classification
+            ORDER BY count DESC
+            """,
+            (doctor_identity,),
+        ).fetchall()
+        
+        distribution_dict = {row["classification"]: row["count"] for row in my_distribution}
+
+        # Global stats across all doctors
+        global_labeled_count = conn.execute(
+            "SELECT COUNT(DISTINCT image_path) as count FROM mil10k_labels"
+        ).fetchone()["count"]
+
+        global_distribution_rows = conn.execute(
+            """
+            SELECT classification, COUNT(*) as count
+            FROM mil10k_labels
+            GROUP BY classification
+            ORDER BY count DESC
+            """
+        ).fetchall()
+
+        global_distribution = {
+            row["classification"]: row["count"] for row in global_distribution_rows
+        }
+        
+        return {
+            "total_images": total_images,
+            "labeled_count": my_labeled_count,
+            "unlabeled_count": max(total_images - my_labeled_count, 0),
+            "completion_percentage": round((my_labeled_count / total_images * 100) if total_images > 0 else 0, 2),
+            "distribution": distribution_dict,
+            "global_labeled_count": global_labeled_count,
+            "global_unlabeled_count": max(total_images - global_labeled_count, 0),
+            "global_completion_percentage": round((global_labeled_count / total_images * 100) if total_images > 0 else 0, 2),
+            "global_distribution": global_distribution,
+        }
+    except Exception as e:
+        print(f"Error getting stats: {e}")
+        raise HTTPException(status_code=500, detail="Could not get stats")
+    finally:
+        conn.close()

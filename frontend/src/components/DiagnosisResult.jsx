@@ -10,7 +10,7 @@ export default function DiagnosisResult({ language = 'en', result, location, use
         aiPrediction: 'AI Prediction',
         confidence: 'Confidence',
         topDifferential: 'Top Differential Class',
-        allClassPredictions: 'All Class Predictions',
+        allClassPredictions: 'Other Class Predictions',
         malignant: 'Malignant',
         probability: 'Probability',
         benign: 'Benign',
@@ -25,7 +25,7 @@ export default function DiagnosisResult({ language = 'en', result, location, use
         aiPrediction: 'Yapay Zeka Tahmini',
         confidence: 'Güven',
         topDifferential: 'En İyi Farklılaşım Sınıfı',
-        allClassPredictions: 'Tüm Sınıf Tahminleri',
+        allClassPredictions: 'Diğer Sınıf Tahminleri',
         malignant: 'Kötü Huylu',
         benign: 'İyi Huylu',
         opticalWarning: 'Optik Kalite Uyarısı',        probability: 'Olasılık',        clinicalClipboard: 'Klinik not panoya kopyalandı.',
@@ -113,10 +113,11 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
     // Malignant class set (matches backend)
     const MALIGNANT_CLASSES = new Set(['MEL', 'BCC', 'SCCKA', 'AKIEC', 'MAL_OTH']);
 
-    // Sort predictions by probability descending
+    // Sort predictions by probability descending and exclude the top class to avoid duplicates
     const sortedPredictions = result?.details?.all_predictions
         ? [...result.details.all_predictions]
             .filter((pred, index, self) => self.findIndex(p => p.class === pred.class) === index) // Remove duplicates
+            .filter(pred => pred.class !== result.details?.top_class) // Exclude top class from all predictions
             .sort((a, b) => b.prob - a.prob)
         : [];
 
