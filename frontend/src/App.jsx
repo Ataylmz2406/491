@@ -6,6 +6,7 @@ import DiagnosisResult from './components/DiagnosisResult';
 import PatientHistory from './components/PatientHistory';
 import SecondOpinion from './components/SecondOpinion';
 import SecondOpinionFeed from './components/SecondOpinionFeed';
+import ImageLabelingPage from './components/ImageLabelingPage';
 import Login from './components/Login';
 import PatientLookup from './components/PatientLookup';
 import CaseNotes from './components/CaseNotes';
@@ -106,6 +107,7 @@ function App() {
       labelAnalysis: 'Ask AI',
       labelAsk: 'Ask other doctors',
       labelFeed: 'Help other doctors',
+      labelResearch: 'Help Researchers',
       language: 'Language',
       english: 'English',
       turkish: 'Türkçe'
@@ -137,6 +139,7 @@ function App() {
       labelAnalysis: 'AI\'ye Sor',
       labelAsk: 'Diğer doktorlara sor',
       labelFeed: 'Diğer doktorlara yardımcı ol',
+      labelResearch: 'Araştırmacılara Yardımcı Ol',
       language: 'Dil',
       english: 'English',
       turkish: 'Türkçe'
@@ -154,6 +157,8 @@ function App() {
     } else if (selectedTab === 'feed') {
       setActiveTab('secondOpinion');
       setSecondOpinionSubTab('feed');
+    } else if (selectedTab === 'help') {
+      setActiveTab('help');
     }
   }, [selectedTab]);
 
@@ -408,7 +413,7 @@ function App() {
 
   return (
     <div className="flex h-screen overflow-hidden font-sans text-gray-800 bg-gray-50">
-      {!(activeTab === 'secondOpinion' && secondOpinionSubTab === 'feed') && (
+      {!(activeTab === 'secondOpinion' && secondOpinionSubTab === 'feed') && activeTab !== 'help' && (
         <Sidebar
           language={language}
           location={location}
@@ -437,6 +442,11 @@ function App() {
                 <div className="flex items-center mb-1 mt-1">
                    <img src="/logo%20only.png" alt="SUDerm Header Logo" className="h-[4.5rem] w-auto object-contain" />
                 </div>
+              ) : activeTab === 'help' ? (
+                <>
+                  <h2 className="text-2xl font-semibold text-gray-800">{t.labelResearch}</h2>
+                  <p className="text-sm text-gray-500">Help build training datasets for skin lesion classification</p>
+                </>
               ) : (
                 <>
                   <h2 className="text-2xl font-semibold text-gray-800">
@@ -519,6 +529,19 @@ function App() {
                     }}
                   >
                     {t.labelFeed}
+                  </button>
+                  <button
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'help' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    onClick={() => {
+                      if (!loggedIn) {
+                        setPendingTab('help');
+                        setShowLogin(true);
+                        return;
+                      }
+                      setSelectedTab('help');
+                    }}
+                  >
+                    {t.labelResearch}
                   </button>
                 </div>
               )}
@@ -655,6 +678,11 @@ function App() {
                 </div>
               </div>
             </div>
+          ) : activeTab === 'help' ? (
+            <ImageLabelingPage
+              language={language}
+              onViewHistory={handleOpenHistory}
+            />
           ) : (
             <div className="max-w-6xl mx-auto p-8">
               {secondOpinionSubTab === 'ask' ? (
