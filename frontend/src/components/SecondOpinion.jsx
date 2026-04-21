@@ -367,39 +367,51 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <input
-          type="text"
-          value={isAnonymous ? '' : doctorName}
-          onChange={(e) => setDoctorName(e.target.value)}
-          disabled={isAnonymous}
-          className={`w-full rounded-lg border border-gray-300 px-3 py-2 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-900'}`}
-          placeholder={t.doctorName}
-        />
-        <input
-          type="text"
-          value={doctorAffiliation}
-          onChange={(e) => setDoctorAffiliation(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2"
-          placeholder={t.affiliation}
-        />
-        <input
-          type="text"
-          value={patientId}
-          onChange={(e) => setPatientId(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2"
-          placeholder={t.patientId}
-        />
-        <select
-          value={currentHypothesis}
-          onChange={(e) => setCurrentHypothesis(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2"
-        >
-          {SECOND_OPINION_DISEASE_OPTIONS.map((option) => (
-            <option key={option.value || 'none'} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t.doctorName} <span className="text-red-500">*</span></label>
+          <input
+            type="text"
+            value={isAnonymous ? '' : doctorName}
+            onChange={(e) => setDoctorName(e.target.value)}
+            disabled={isAnonymous}
+            className={`w-full rounded-lg border border-gray-300 px-3 py-2 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-900'}`}
+            placeholder={t.doctorName}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t.affiliation}</label>
+          <input
+            type="text"
+            value={doctorAffiliation}
+            onChange={(e) => setDoctorAffiliation(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            placeholder={t.affiliation}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t.patientId} <span className="text-red-500">*</span></label>
+          <input
+            type="text"
+            value={patientId}
+            onChange={(e) => setPatientId(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            placeholder={t.patientId}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t.currentHypothesis} <span className="text-red-500">*</span></label>
+          <select
+            value={currentHypothesis}
+            onChange={(e) => setCurrentHypothesis(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          >
+            {SECOND_OPINION_DISEASE_OPTIONS.map((option) => (
+              <option key={option.value || 'none'} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="rounded-lg border border-dashed border-gray-300 p-4">
@@ -432,6 +444,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       </div>
 
       <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">{t.caption} <span className="text-red-500">*</span></label>
         <textarea
           value={draft.caption}
           onChange={(e) => setDraft((prev) => ({ ...prev, caption: e.target.value.slice(0, CAPTION_MAX) }))}

@@ -586,7 +586,7 @@ function App() {
                       {/* Patient ID Input (Doctor Mode) */}
                       {userType === 'doctor' && (
                         <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
-                          <label className="block text-sm font-bold text-gray-700 mb-2">Patient ID</label>
+                          <label className="block text-sm font-bold text-gray-700 mb-2">Patient ID <span className="text-red-500">*</span></label>
                           <input
                             type="text"
                             value={patientId}
