@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, Loader2, CheckCircle, ChevronRight, ChevronLeft, BarChart3 } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+import {
+  fetchMil10kImages,
+  fetchMil10kImageData,
+  fetchMil10kLabel,
+  fetchMil10kStats,
+  saveMil10kLabel,
+} from '../services/imageLabelingService';
 
 // Classification class names matching the backend
 const CLASS_NAMES = [
@@ -24,7 +29,7 @@ const CLASS_DESCRIPTIONS = {
   'VASC': 'Vascular lesion'
 };
 
-export default function ImageLabelingPage({ language = 'en', onViewHistory }) {
+export default function ImageLabelingPage({ language = 'en' }) {
   const translations = {
     en: {
 
@@ -55,7 +60,8 @@ export default function ImageLabelingPage({ language = 'en', onViewHistory }) {
       completion: 'Completion',
       distribution: 'Label Distribution',
       pleaseSelectClass: 'Please select a classification.',
-      confirmBeforeSkip: 'You have unsaved changes. Do you want to skip this image?'
+      confirmBeforeSkip: 'You have unsaved changes. Do you want to skip this image?',
+      authRequired: 'Please log in to label images.'
     },
     tr: {
 
@@ -86,11 +92,13 @@ export default function ImageLabelingPage({ language = 'en', onViewHistory }) {
       completion: 'Tamamlanma',
       distribution: 'Etiket Dağılımı',
       pleaseSelectClass: 'Lütfen bir sınıflandırma seçin.',
-      confirmBeforeSkip: 'Kaydedilmemiş değişiklikleriniz var. Bu görüntüyü atlamak istiyor musunuz?'
+      confirmBeforeSkip: 'Kaydedilmemiş değişiklikleriniz var. Bu görüntüyü atlamak istiyor musunuz?',
+      authRequired: 'Görüntüleri etiketlemek için lütfen giriş yapın.'
     }
   };
 
   const t = translations[language] || translations.en;
+  const authRequiredMessage = t.authRequired;
 
   // State
   const [images, setImages] = useState([]);
@@ -106,7 +114,6 @@ export default function ImageLabelingPage({ language = 'en', onViewHistory }) {
   const [loadingStats, setLoadingStats] = useState(true);
   const [currentImageData, setCurrentImageData] = useState(null);
   const [currentImageLoading, setCurrentImageLoading] = useState(false);
-  const [currentLabel, setCurrentLabel] = useState(null);
 
   // Load images
   useEffect(() => {
@@ -114,17 +121,13 @@ export default function ImageLabelingPage({ language = 'en', onViewHistory }) {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(`${API_BASE_URL}/mil10k/images`);
-        if (!response.ok) {
-          throw new Error('Failed to load images');
-        }
-        const data = await response.json();
+        const data = await fetchMil10kImages();
         setImages(data);
         if (data.length > 0) {
           setCurrentImageIndex(0);
         }
       } catch (err) {
-        setError(err.message);
+        setError(err.message === 'AUTH_REQUIRED' ? authRequiredMessage : err.message);
         console.error('Error loading images:', err);
       } finally {
         setLoading(false);
@@ -132,18 +135,14 @@ export default function ImageLabelingPage({ language = 'en', onViewHistory }) {
     };
 
     loadImages();
-  }, []);
+  }, [authRequiredMessage]);
 
   // Load statistics
   useEffect(() => {
     const loadStats = async () => {
       try {
         setLoadingStats(true);
-        const response = await fetch(`${API_BASE_URL}/mil10k/labels-stats`);
-        if (!response.ok) {
-          throw new Error('Failed to load stats');
-        }
-        const data = await response.json();
+        const data = await fetchMil10kStats();
         setStats(data);
       } catch (err) {
         console.error('Error loading stats:', err);
@@ -164,35 +163,22 @@ export default function ImageLabelingPage({ language = 'en', onViewHistory }) {
       try {
         setCurrentImageLoading(true);
         setCurrentImageData(null);
-        setCurrentLabel(null);
         setClassification('');
         setConfidenceScore(3);
         setSubmitError(null);
 
         // Load image data
-        const imageResponse = await fetch(
-          `${API_BASE_URL}/mil10k/image-data/${currentImage.folder}/${currentImage.filename}`
-        );
-        if (!imageResponse.ok) {
-          throw new Error('Failed to load image');
-        }
-        const imageData = await imageResponse.json();
+        const imageData = await fetchMil10kImageData(currentImage.folder, currentImage.filename);
         setCurrentImageData(imageData);
 
         // Try to load existing label
         try {
-          const labelResponse = await fetch(
-            `${API_BASE_URL}/mil10k/labels/${currentImage.folder}/${currentImage.filename}`
-          );
-          if (labelResponse.ok) {
-            const labelData = await labelResponse.json();
-            if (labelData) {
-              setCurrentLabel(labelData);
-              setClassification(labelData.classification);
-              setConfidenceScore(labelData.confidence_score);
-            }
+          const labelData = await fetchMil10kLabel(currentImage.folder, currentImage.filename);
+          if (labelData) {
+            setClassification(labelData.classification);
+            setConfidenceScore(labelData.confidence_score);
           }
-        } catch (err) {
+        } catch {
           // Label might not exist yet, that's fine
         }
       } catch (err) {
@@ -225,37 +211,20 @@ export default function ImageLabelingPage({ language = 'en', onViewHistory }) {
     try {
       setSubmitting(true);
       setSubmitError(null);
-
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE_URL}/mil10k/labels`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          image_path: `${currentImageData.folder}/${currentImageData.filename}`,
-          image_folder: currentImageData.folder,
-          image_filename: currentImageData.filename,
-          classification,
-          confidence_score: parseInt(confidenceScore)
-        })
+      await saveMil10kLabel({
+        image_path: `${currentImageData.folder}/${currentImageData.filename}`,
+        image_folder: currentImageData.folder,
+        image_filename: currentImageData.filename,
+        classification,
+        confidence_score: parseInt(confidenceScore, 10)
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to save label');
-      }
 
       showToast(t.labeledSuccessfully);
       
       // Reload stats
       try {
-        const statsResponse = await fetch(`${API_BASE_URL}/mil10k/labels-stats`);
-        if (statsResponse.ok) {
-          const statsData = await statsResponse.json();
-          setStats(statsData);
-        }
+        const statsData = await fetchMil10kStats();
+        setStats(statsData);
       } catch (err) {
         console.error('Error reloading stats:', err);
       }
@@ -267,7 +236,7 @@ export default function ImageLabelingPage({ language = 'en', onViewHistory }) {
         showToast('All images labeled!');
       }
     } catch (err) {
-      setSubmitError(err.message);
+      setSubmitError(err.message === 'AUTH_REQUIRED' ? authRequiredMessage : err.message);
       console.error('Error submitting label:', err);
     } finally {
       setSubmitting(false);
@@ -320,9 +289,6 @@ export default function ImageLabelingPage({ language = 'en', onViewHistory }) {
       </div>
     );
   }
-
-  const currentImage = images[currentImageIndex];
-  const hasLabel = currentLabel !== null;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
