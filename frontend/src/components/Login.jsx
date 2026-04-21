@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { authLogin } from '../services/authService';
+import { authLogin, authRegister } from '../services/authService';
 
 export default function Login({ language = 'en', userType, onLoginSuccess, onBack, onGuestAccess }) {
   // fields
@@ -23,10 +23,15 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
       back: '← Back',
       login: 'Log In',
       register: 'Register',
+      doctorRegister: 'Doctor Registration',
+      researcherRegister: 'Researcher Registration',
+      personalRegister: 'Personal Registration',
       needAccount: 'Need an account? Register',
       haveAccount: 'Already have an account? Log in',
-      continueAsGuest: 'Continue as Guest'
-      ,loginFailed: 'Authentication failed. Please check your credentials.'
+      continueAsGuest: 'Continue as Guest',
+      loginFailed: 'Authentication failed. Please check your credentials.',
+      userExists: 'An account with these credentials already exists. Please log in.',
+      invalidCredentials: 'Invalid credentials. Please check your details or register.',
     },
     tr: {
       doctorLogin: 'Doktor Girişi',
@@ -39,10 +44,15 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
       back: '← Geri',
       login: 'Giriş Yap',
       register: 'Kayıt Ol',
+      doctorRegister: 'Doktor Kaydı',
+      researcherRegister: 'Araştırmacı Kaydı',
+      personalRegister: 'Bireysel Kayıt',
       needAccount: 'Hesabınız yok mu? Kayıt Ol',
       haveAccount: 'Zaten hesabınız var mı? Giriş Yap',
-      continueAsGuest: 'Ziyaretçi olarak devam et'
-      ,loginFailed: 'Kimlik doğrulama başarısız. Bilgilerinizi kontrol edin.'
+      continueAsGuest: 'Ziyaretçi olarak devam et',
+      loginFailed: 'Kimlik doğrulama başarısız. Bilgilerinizi kontrol edin.',
+      userExists: 'Bu kimlik bilgileriyle zaten bir hesap var. Lütfen giriş yapın.',
+      invalidCredentials: 'Geçersiz kimlik bilgileri. Bilgilerinizi kontrol edin veya kayıt olun.',
     }
   };
 
@@ -67,7 +77,7 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
       }
 
       const authPromise = isRegistering 
-        ? import('../services/authService').then(m => m.authRegister(authPayload))
+        ? authRegister(authPayload)
         : authLogin(authPayload);
       const authResult = await authPromise;
 
@@ -82,7 +92,15 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
         displayName: authResult.display_name,
       });
     } catch (err) {
-      setError(err.message || t.loginFailed);
+      // Map HTTP status codes to friendly UI messages
+      const status = err?.status || err?.response?.status;
+      if (status === 409) {
+        setError(t.userExists);
+      } else if (status === 401) {
+        setError(t.invalidCredentials);
+      } else {
+        setError(err.message || t.loginFailed);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -92,9 +110,9 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
     <div className="h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-brand-50">
       <div className="w-full max-w-md bg-white shadow-xl rounded-2xl p-8 border border-gray-100">
         <h2 className="text-2xl font-semibold mb-6 text-center text-slate-800">
-          {userType === 'doctor' && t.doctorLogin}
-          {userType === 'researcher' && t.researcherLogin}
-          {userType === 'personal' && t.personalLogin}
+          {userType === 'doctor' && (isRegistering ? t.doctorRegister : t.doctorLogin)}
+          {userType === 'researcher' && (isRegistering ? t.researcherRegister : t.researcherLogin)}
+          {userType === 'personal' && (isRegistering ? t.personalRegister : t.personalLogin)}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           {userType === 'doctor' && (
@@ -189,6 +207,10 @@ export default function Login({ language = 'en', userType, onLoginSuccess, onBac
               onClick={() => {
                 setIsRegistering(!isRegistering);
                 setError('');
+                setPassword('');
+                setEmail('');
+                setHospital('');
+                setDoctorId('');
               }}
               className="text-sm text-brand-600 hover:text-brand-800 font-medium transition-colors"
             >
