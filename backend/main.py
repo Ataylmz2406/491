@@ -153,7 +153,11 @@ def init_db():
                 user_type TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
                 display_name TEXT NOT NULL,
+                email TEXT,
+                full_name TEXT,
+                phone_number TEXT,
                 hospital TEXT,
+                doctor_id TEXT,
                 created_at TEXT NOT NULL
             )
             """
@@ -221,6 +225,7 @@ def init_db():
     finally:
         conn.close()
     ensure_schema_columns()
+    ensure_user_schema_columns()
     ensure_second_opinion_schema_columns()
     ensure_second_opinion_strict_constraints()
     ensure_auth_token_schema_columns()
@@ -315,9 +320,12 @@ AUTH_ALLOWED_USER_TYPES = {"doctor", "researcher", "personal"}
 class AuthLoginRequest(BaseModel):
     user_type: str
     password: str
+    confirm_password: str | None = None
     doctor_id: str | None = None
     hospital: str | None = None
     email: str | None = None
+    full_name: str | None = None
+    phone_number: str | None = None
 
 
 class AuthLoginResponse(BaseModel):
@@ -326,12 +334,22 @@ class AuthLoginResponse(BaseModel):
     expires_at: str
     user_type: str
     display_name: str
+    email: str | None = None
+    full_name: str | None = None
+    phone_number: str | None = None
+    hospital: str | None = None
+    doctor_id: str | None = None
 
 
 class AuthMeResponse(BaseModel):
     user_type: str
     display_name: str
     expires_at: str
+    email: str | None = None
+    full_name: str | None = None
+    phone_number: str | None = None
+    hospital: str | None = None
+    doctor_id: str | None = None
 
 
 class ImageLabelCreate(BaseModel):
@@ -506,7 +524,7 @@ def _verify_doctor_token(authorization: str) -> sqlite3.Row:
     return token_row
 
 
-def _issue_auth_token(user_type: str, subject: str, display_name: str) -> AuthLoginResponse:
+def _issue_auth_token(user_type: str, subject: str, display_name: str, email: str | None = None, full_name: str | None = None, phone_number: str | None = None, hospital: str | None = None, doctor_id: str | None = None) -> AuthLoginResponse:
     raw_token = secrets.token_urlsafe(32)
     token_hash = _hash_token(raw_token)
     now = datetime.now(timezone.utc)
@@ -538,6 +556,11 @@ def _issue_auth_token(user_type: str, subject: str, display_name: str) -> AuthLo
         expires_at=expires_at.isoformat(),
         user_type=user_type,
         display_name=display_name,
+        email=email,
+        full_name=full_name,
+        phone_number=phone_number,
+        hospital=hospital,
+        doctor_id=doctor_id,
     )
 
 
@@ -633,11 +656,40 @@ def ensure_schema_columns():
             "age_group": "TEXT",
             "sex": "TEXT",
             "skin_tone": "TEXT",
+            "doctor_id": "TEXT",
+            "doctor_name": "TEXT",
+            "prediction": "TEXT",
+            "confidence_score": "REAL",
+            "created_at": "TEXT",
+            "lesion_location": "TEXT",
         }
         for column_name, column_type in migration_columns.items():
             if column_name not in columns:
                 conn.execute(
                     f"ALTER TABLE diagnoses ADD COLUMN {column_name} {column_type}"
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def ensure_user_schema_columns():
+    """Adds newly introduced optional columns for users table."""
+    conn = get_db_connection()
+    try:
+        columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+        }
+        migration_columns = {
+            "email": "TEXT",
+            "full_name": "TEXT",
+            "phone_number": "TEXT",
+            "doctor_id": "TEXT",
+        }
+        for column_name, column_type in migration_columns.items():
+            if column_name not in columns:
+                conn.execute(
+                    f"ALTER TABLE users ADD COLUMN {column_name} {column_type}"
                 )
         conn.commit()
     finally:
@@ -1110,6 +1162,14 @@ async def lifespan(app: FastAPI):
     # 1.1 Initialize SQLite database
     init_db()
     
+    # 1.2 Run schema migrations
+    ensure_schema_columns()
+    ensure_user_schema_columns()
+    ensure_second_opinion_schema_columns()
+    ensure_auth_token_schema_columns()
+    ensure_mil10k_labels_schema()
+    ensure_second_opinion_strict_constraints()
+    
     # 2. Initialize Model
     print(f"Initializing model on {DEVICE}...")
     model = DualHierarchicalModel(arch='tf_efficientnetv2_xl.in21k_ft_in1k', emb_dim=512, dropout=0.2)
@@ -1230,10 +1290,37 @@ def read_root():
 
 import hashlib
 import sqlite3
+import re
 
 def _hash_password(password: str) -> str:
     # A simple deterministic hash for demonstration; in prod use passlib/bcrypt
     return hashlib.sha256(f"suderm_salt_{password}".encode('utf-8')).hexdigest()
+
+
+def _validate_password(password: str) -> tuple[bool, str]:
+    """
+    Validate password against rules.
+    Returns: (is_valid, error_message)
+    
+    Rules:
+    - At least 6 characters
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one digit
+    """
+    if len(password) < 6:
+        return False, "Password must be at least 6 characters long"
+    
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter"
+    
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter"
+    
+    if not re.search(r'\d', password):
+        return False, "Password must contain at least one digit"
+    
+    return True, ""
 
 @app.post("/auth/register", response_model=AuthLoginResponse)
 def auth_register(payload: AuthLoginRequest):
@@ -1242,25 +1329,49 @@ def auth_register(payload: AuthLoginRequest):
         allowed = ", ".join(sorted(AUTH_ALLOWED_USER_TYPES))
         raise HTTPException(status_code=400, detail=f"Invalid user_type. Allowed values: {allowed}")
 
-    if len(payload.password.strip()) < 4:
-        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    # Validate password
+    is_valid, error_msg = _validate_password(payload.password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # Check password confirmation
+    if payload.confirm_password != payload.password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
 
     if user_type == "doctor":
         doctor_id = _clean_optional_text(payload.doctor_id, 120)
         hospital = _clean_optional_text(payload.hospital, 255)
+        full_name = _clean_optional_text(payload.full_name, 255)
+        phone_number = _clean_optional_text(payload.phone_number, 20)
+        email = _clean_optional_text(payload.email, 255)
+        
         if not doctor_id:
             raise HTTPException(status_code=400, detail="doctor_id is required for doctor registration")
-        subject = doctor_id.lower()
-        display_name = doctor_id
-        if hospital:
-            display_name = f"{doctor_id} @ {hospital}"
+        if not email:
+            raise HTTPException(status_code=400, detail="email is required for doctor registration")
+        if not full_name:
+            raise HTTPException(status_code=400, detail="full_name is required for doctor registration")
+        if not phone_number:
+            raise HTTPException(status_code=400, detail="phone_number is required for doctor registration")
+            
+        subject = email.lower()
+        display_name = f"{full_name} ({doctor_id})"
     else:
         email = _clean_optional_text(payload.email, 255)
+        full_name = _clean_optional_text(payload.full_name, 255)
+        phone_number = _clean_optional_text(payload.phone_number, 20)
+        
         if not email:
             raise HTTPException(status_code=400, detail="email is required for registration")
+        if not full_name:
+            raise HTTPException(status_code=400, detail="full_name is required for registration")
+        if not phone_number:
+            raise HTTPException(status_code=400, detail="phone_number is required for registration")
+            
         subject = email.lower()
-        display_name = email
+        display_name = full_name
         hospital = None
+        doctor_id = None
 
     password_hash = _hash_password(payload.password)
     now = utc_now_iso()
@@ -1270,10 +1381,10 @@ def auth_register(payload: AuthLoginRequest):
         try:
             conn.execute(
                 """
-                INSERT INTO users (subject, user_type, password_hash, display_name, hospital, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO users (subject, user_type, password_hash, display_name, email, full_name, phone_number, hospital, doctor_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (subject, user_type, password_hash, display_name, hospital, now)
+                (subject, user_type, password_hash, display_name, email, full_name, phone_number, hospital, doctor_id, now)
             )
             conn.commit()
         except sqlite3.IntegrityError:
@@ -1281,7 +1392,16 @@ def auth_register(payload: AuthLoginRequest):
     finally:
         conn.close()
 
-    return _issue_auth_token(user_type=user_type, subject=subject, display_name=display_name)
+    return _issue_auth_token(
+        user_type=user_type,
+        subject=subject,
+        display_name=display_name,
+        email=email,
+        full_name=full_name,
+        phone_number=phone_number,
+        hospital=hospital,
+        doctor_id=doctor_id,
+    )
 
 @app.post("/auth/login", response_model=AuthLoginResponse)
 def auth_login(payload: AuthLoginRequest):
@@ -1290,18 +1410,16 @@ def auth_login(payload: AuthLoginRequest):
         allowed = ", ".join(sorted(AUTH_ALLOWED_USER_TYPES))
         raise HTTPException(status_code=400, detail=f"Invalid user_type. Allowed values: {allowed}")
 
-    if len(payload.password.strip()) < 4:
-        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    # Validate password format
+    is_valid, error_msg = _validate_password(payload.password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
 
     if user_type == "doctor":
-        doctor_id = _clean_optional_text(payload.doctor_id, 120)
-        hospital = _clean_optional_text(payload.hospital, 255)
-        if not doctor_id:
-            raise HTTPException(status_code=400, detail="doctor_id is required for doctor login")
-        subject = doctor_id.lower()
-        display_name = doctor_id
-        if hospital:
-            display_name = f"{doctor_id} @ {hospital}"
+        email = _clean_optional_text(payload.email, 255)
+        if not email:
+            raise HTTPException(status_code=400, detail="email is required for doctor login")
+        subject = email.lower()
     else:
         email = _clean_optional_text(payload.email, 255)
         if not email:
@@ -1313,7 +1431,7 @@ def auth_login(payload: AuthLoginRequest):
     conn = get_db_connection()
     try:
         user = conn.execute(
-            "SELECT display_name FROM users WHERE subject = ? AND user_type = ? AND password_hash = ?",
+            "SELECT display_name, email, full_name, phone_number, hospital, doctor_id FROM users WHERE subject = ? AND user_type = ? AND password_hash = ?",
             (subject, user_type, password_hash)
         ).fetchone()
         
@@ -1321,10 +1439,24 @@ def auth_login(payload: AuthLoginRequest):
             raise HTTPException(status_code=401, detail="Invalid credentials or user not registered")
             
         display_name = user["display_name"]
+        email = user["email"]
+        full_name = user["full_name"]
+        phone_number = user["phone_number"]
+        hospital = user["hospital"]
+        doctor_id = user["doctor_id"]
     finally:
         conn.close()
 
-    return _issue_auth_token(user_type=user_type, subject=subject, display_name=display_name)
+    return _issue_auth_token(
+        user_type=user_type,
+        subject=subject,
+        display_name=display_name,
+        email=email,
+        full_name=full_name,
+        phone_number=phone_number,
+        hospital=hospital,
+        doctor_id=doctor_id,
+    )
 
 
 @app.get("/auth/me", response_model=AuthMeResponse)
@@ -1357,6 +1489,115 @@ def auth_logout(authorization: str = Header(default="")):
         if cursor.rowcount == 0:
             raise HTTPException(status_code=401, detail="Invalid or already revoked token")
         return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.post("/doctor/save-analysis")
+def save_doctor_analysis(
+    authorization: str = Header(default=""),
+    patient_id: str = Form(None),
+    prediction: str = Form(None),
+    confidence_score: float = Form(None),
+    lesion_location: str = Form(None),
+    age_group: str = Form(None),
+    sex: str = Form(None),
+    skin_tone: str = Form(None),
+):
+    """Save a diagnosis analysis for a doctor."""
+    token_row = _verify_doctor_token(authorization)
+    
+    conn = get_db_connection()
+    try:
+        doctor_id = token_row["subject"] or token_row["display_name"]
+        doctor_name = token_row["display_name"]
+        now = utc_now_iso()
+        
+        cursor = conn.execute(
+            """
+            INSERT INTO diagnoses (
+                date, diagnosis, confidence, location, status,
+                patient_id, age_group, sex, skin_tone, doctor_id, doctor_name,
+                prediction, confidence_score, created_at, lesion_location
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                now,
+                prediction or "",
+                confidence_score or 0.0,
+                lesion_location or "",
+                "completed",
+                patient_id,
+                age_group,
+                sex,
+                skin_tone,
+                doctor_id,
+                doctor_name,
+                prediction or "",
+                confidence_score or 0.0,
+                now,
+                lesion_location or "",
+            ),
+        )
+        conn.commit()
+        
+        return {
+            "id": cursor.lastrowid,
+            "date": now,
+            "prediction": prediction,
+            "confidence_score": confidence_score,
+            "patient_id": patient_id,
+            "lesion_location": lesion_location,
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/doctor/analyses")
+def get_doctor_analyses(authorization: str = Header(default="")):
+    """Retrieve all analyses for the logged-in doctor."""
+    token_row = _verify_doctor_token(authorization)
+    
+    conn = get_db_connection()
+    try:
+        doctor_id = token_row["subject"] or token_row["display_name"]
+        # Use COALESCE to handle missing columns gracefully
+        rows = conn.execute(
+            """
+            SELECT 
+                id, date, 
+                COALESCE(prediction, diagnosis) as prediction,
+                COALESCE(confidence_score, confidence) as confidence_score, 
+                COALESCE(lesion_location, location) as lesion_location,
+                status,
+                patient_id, age_group, sex, skin_tone, doctor_id, doctor_name,
+                COALESCE(created_at, date) as created_at
+            FROM diagnoses
+            WHERE doctor_id = ? OR doctor_name = ?
+            ORDER BY date DESC, id DESC
+            LIMIT 1000
+            """,
+            (doctor_id, token_row["display_name"]),
+        ).fetchall()
+        
+        analyses = []
+        for row in rows:
+            analyses.append({
+                "id": row["id"],
+                "date": row["date"],
+                "created_at": row["created_at"],
+                "prediction": row["prediction"],
+                "confidence_score": row["confidence_score"],
+                "lesion_location": row["lesion_location"],
+                "patient_id": row["patient_id"],
+                "age_group": row["age_group"],
+                "sex": row["sex"],
+                "skin_tone": row["skin_tone"],
+                "status": row["status"],
+            })
+        
+        return analyses
     finally:
         conn.close()
 

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Activity, AlertCircle, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Activity, AlertCircle, CheckCircle, LogOut, User } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import ImageUploader from './components/ImageUploader';
 import DiagnosisResult from './components/DiagnosisResult';
@@ -8,11 +8,14 @@ import SecondOpinion from './components/SecondOpinion';
 import SecondOpinionFeed from './components/SecondOpinionFeed';
 import ImageLabelingPage from './components/ImageLabelingPage';
 import Login from './components/Login';
+import LoginNew from './components/LoginNew';
+import Register from './components/Register';
 import PatientLookup from './components/PatientLookup';
 import CaseNotes from './components/CaseNotes';
 import Tutorial from './components/Tutorial';
+import MyAccount from './components/MyAccount';
 import { CaseProvider, useCaseContext } from './context/CaseContext';
-import { clearAccessToken, setAccessToken } from './services/authService';
+import { clearAccessToken, setAccessToken, getAccessToken } from './services/authService';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -32,10 +35,12 @@ function App() {
   // --- Landing / Navigation State ---
   const [showLanding, setShowLanding] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [userType, setUserType] = useState(null); // 'doctor' | 'researcher' | 'personal'
   const [loginData, setLoginData] = useState(null); // store credentials/misc info
+  const [showMyAccount, setShowMyAccount] = useState(false); // Show My Account page
 
   // --- Image State ---
   const [dermFiles, setDermFiles] = useState([]);
@@ -110,7 +115,10 @@ function App() {
       labelResearch: 'Help Researchers',
       language: 'Language',
       english: 'English',
-      turkish: 'Türkçe'
+      turkish: 'Türkçe',
+      myAccount: 'My Account',
+      signOut: 'Sign Out',
+      myAnalyses: 'My Analyses'
     },
     tr: {
       landingSubtitle: 'Profesyonel Yapay Zeka Cilt Teşhisi',
@@ -142,11 +150,37 @@ function App() {
       labelResearch: 'Araştırmacılara Yardımcı Ol',
       language: 'Dil',
       english: 'English',
-      turkish: 'Türkçe'
+      turkish: 'Türkçe',
+      myAccount: 'Hesabım',
+      signOut: 'Çıkış Yap',
+      myAnalyses: 'Analizlerim'
     }
   };
 
   const t = translations[language];
+
+  // --- Check for persisted login on mount ---
+  useEffect(() => {
+    const token = getAccessToken();
+    const storedUserType = localStorage.getItem('suderm_user_type');
+    const storedLoginData = localStorage.getItem('suderm_login_data');
+
+    if (token && storedUserType && storedLoginData) {
+      try {
+        const parsedData = JSON.parse(storedLoginData);
+        setUserType(storedUserType);
+        setLoginData(parsedData);
+        setLoggedIn(true);
+        setShowLanding(false);
+        setShowTutorial(true); // Show tutorial or go directly to app based on your preference
+      } catch (e) {
+        console.error('Failed to restore login state:', e);
+        clearAccessToken();
+        localStorage.removeItem('suderm_user_type');
+        localStorage.removeItem('suderm_login_data');
+      }
+    }
+  }, []);
 
   React.useEffect(() => {
     if (selectedTab === 'analysis') {
@@ -206,7 +240,18 @@ function App() {
     setUserType(type);
     setShowLanding(false);
     setShowLogin(true);
+    setShowRegister(false);
     setLoggedIn(false);
+  };
+
+  const handleSwitchToRegister = () => {
+    setShowLogin(false);
+    setShowRegister(true);
+  };
+
+  const handleSwitchToLogin = () => {
+    setShowRegister(false);
+    setShowLogin(true);
   };
 
   const handleGuestAccess = () => {
@@ -218,21 +263,39 @@ function App() {
       setPendingTab(null);
     }
     setShowLogin(false);
+    setShowRegister(false);
     setShowTutorial(true);
   };
 
   const handleLoginSuccess = (data) => {
-    if (data?.accessToken) {
-      setAccessToken(data.accessToken);
+    if (data?.access_token) {
+      setAccessToken(data.access_token);
     }
     setLoginData(data);
     setLoggedIn(true);
+    // Persist login data to localStorage
+    localStorage.setItem('suderm_user_type', userType);
+    localStorage.setItem('suderm_login_data', JSON.stringify(data));
     if (pendingTab) {
       setSelectedTab(pendingTab);
       setPendingTab(null);
     }
     setShowLogin(false);
+    setShowRegister(false);
     setShowTutorial(true);
+  };
+
+  const handleLogout = () => {
+    clearAccessToken();
+    localStorage.removeItem('suderm_user_type');
+    localStorage.removeItem('suderm_login_data');
+    setLoggedIn(false);
+    setLoginData(null);
+    setUserType(null);
+    setShowLanding(true);
+    setShowMyAccount(false);
+    setShowTutorial(false);
+    showToast('You have been signed out');
   };
 
   const handleTutorialContinue = () => {
@@ -241,6 +304,16 @@ function App() {
 
   const handleTutorialSkip = () => {
     setShowTutorial(false);
+  };
+
+  const handleAuthCancel = () => {
+    clearAccessToken();
+    localStorage.removeItem('suderm_user_type');
+    localStorage.removeItem('suderm_login_data');
+    setUserType(null);
+    setShowLanding(true);
+    setShowLogin(false);
+    setShowRegister(false);
   };
 
   const handleLoginBack = () => {
@@ -291,6 +364,12 @@ function App() {
       return;
     }
 
+    // Validate patient ID for doctors
+    if (userType === 'doctor' && !patientId.trim()) {
+      setError("Patient ID is required for doctors to run analysis.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setResult(null);
@@ -324,6 +403,40 @@ function App() {
       const data = await response.json();
       setResult(data);
 
+      // Auto-save diagnosis for doctors
+      if (userType === 'doctor' && loggedIn && loginData?.access_token) {
+        try {
+          // Extract confidence_score - it comes as decimal from backend (0-1)
+          const confidence = data.confidence_score || 
+                           (data.details?.top_prob ? data.details.top_prob / 100 : 0);
+          
+          const saveResponse = await fetch(`${API_BASE_URL}/doctor/save-analysis`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${loginData.access_token}`,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              patient_id: patientId || 'Unknown',
+              prediction: data.prediction || data.details?.top_class || '',
+              confidence_score: confidence,
+              lesion_location: location || 'Not specified',
+              age_group: ageGroup || '',
+              sex: sex || '',
+              skin_tone: skinTone || '',
+            }),
+          });
+
+          if (saveResponse.ok) {
+            showToast('Diagnosis saved to your account');
+          } else {
+            console.error('Failed to save analysis:', await saveResponse.text());
+          }
+        } catch (saveErr) {
+          console.error('Error saving diagnosis:', saveErr);
+          // Don't fail the entire operation if save fails
+        }
+      }
     } catch (err) {
       setError(err.message || "An unexpected error occurred.");
     } finally {
@@ -396,7 +509,25 @@ function App() {
 
   // show login form if required
   if (showLogin && userType) {
-    return <Login language={language} userType={userType} onLoginSuccess={handleLoginSuccess} onBack={handleLoginBack} onGuestAccess={handleGuestAccess} />;
+    return (
+      <LoginNew
+        onSuccess={handleLoginSuccess}
+        onSwitchToRegister={handleSwitchToRegister}
+        onCancel={handleAuthCancel}
+        onGuestAccess={handleGuestAccess}
+      />
+    );
+  }
+
+  // show register form if required
+  if (showRegister && userType) {
+    return (
+      <Register
+        onSuccess={handleLoginSuccess}
+        onSwitchToLogin={handleSwitchToLogin}
+        onCancel={handleAuthCancel}
+      />
+    );
   }
 
   if (showTutorial && userType) {
@@ -407,6 +538,17 @@ function App() {
         onContinue={handleTutorialContinue}
         onSkip={handleTutorialSkip}
         onLanguageChange={setLanguage}
+      />
+    );
+  }
+
+  if (showMyAccount && loggedIn) {
+    return (
+      <MyAccount
+        language={language}
+        loginData={loginData}
+        userType={userType}
+        onBack={() => setShowMyAccount(false)}
       />
     );
   }
@@ -460,11 +602,11 @@ function App() {
                 </>
               )}
               {loggedIn && loginData && (
-                <div className="text-xs text-gray-600 mt-1 max-w-xs">
+                <div className="text-xs text-gray-600 mt-1 max-w-xs pointer-events-none">
                   {userType === 'doctor' && (
                     <>
-                      <div>Hospital: {loginData.hospital}</div>
-                      <div>ID: {loginData.doctorId}</div>
+                      <div>Hospital: {loginData.hospital || 'N/A'}</div>
+                      <div>ID: {loginData.doctor_id || loginData.doctorId || 'N/A'}</div>
                     </>
                   )}
                   {userType === 'researcher' && <span>Researcher: {loginData.email}</span>}
@@ -735,6 +877,26 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Doctor Action Buttons - Bottom Right */}
+      {loggedIn && userType === 'doctor' && (
+        <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-40">
+          <button
+            onClick={() => setShowMyAccount(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-md hover:shadow-lg"
+          >
+            <User className="w-4 h-4" />
+            {t.myAccount}
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 shadow-md hover:shadow-lg"
+          >
+            <LogOut className="w-4 h-4" />
+            {t.signOut}
+          </button>
+        </div>
+      )}
 
       {/* Global Toast Component */}
       {toast && (
