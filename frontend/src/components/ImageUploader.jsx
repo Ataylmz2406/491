@@ -3,6 +3,7 @@ import { Camera, ImageIcon, Upload, X, ZoomIn } from 'lucide-react';
 
 export default function ImageUploader({
     language = 'en',
+    userType = null,
     dermFiles, dermPreviews, clinFile, clinPreview, handleFileChange, clearFile,
     showClinical = true
 }) {
@@ -12,12 +13,12 @@ export default function ImageUploader({
 
     const translations = {
       en: {
-        dermoscopicHeader: 'Dermoscopic',
+        dermoscopicHeader: userType === 'personal' ? 'Close-up Photo' : 'Dermoscopic',
         clinicalHeader: 'Clinical',
         required: 'Required',
         optional: 'Optional',
         userMayUpload: 'User may upload up to four photos',
-        uploadDermoscopy: 'Upload Dermoscopy',
+        uploadDermoscopy: userType === 'personal' ? 'Upload Close-up' : 'Upload Dermoscopy',
         uploadDermoscopyDesc: 'High-resolution close-up (JPG, PNG) - Up to 4 photos',
         uploadMore: (count) => `Upload more (${count}/4)`,
         uploadClinicalView: 'Upload Clinical View',
@@ -29,12 +30,12 @@ export default function ImageUploader({
         orDragImageHere: 'or drag an image here'
       },
       tr: {
-        dermoscopicHeader: 'Dermatoskopik',
+        dermoscopicHeader: userType === 'personal' ? 'Yakın Çekim Fotoğraf' : 'Dermatoskopik',
         clinicalHeader: 'Klinik',
         required: 'Zorunlu',
         optional: 'Opsiyonel',
         userMayUpload: 'Kullanıcı en fazla dört fotoğraf yükleyebilir',
-        uploadDermoscopy: 'Dermatoskopi Yükle',
+        uploadDermoscopy: userType === 'personal' ? 'Yakın Çekim Yükle' : 'Dermatoskopi Yükle',
         uploadDermoscopyDesc: 'Yüksek çözünürlüklü yakın çekim (JPG, PNG) - En fazla 4 fotoğraf',
         uploadMore: (count) => `Daha fazla yükle (${count}/4)`,
         uploadClinicalView: 'Klinik Görünüm Yükle',

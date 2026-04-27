@@ -24,6 +24,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
       patientHistory: 'Patient History',
       comments: 'Comments',
       addComment: 'Add Comment',
+      commentAnonymously: 'Comment anonymously',
       noComment: 'No comments yet',
       loading: 'Loading feed...',
       refreshing: 'Refreshing feed...',
@@ -41,6 +42,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
       patientHistory: 'Hasta Geçmişi',
       comments: 'Yorumlar',
       addComment: 'Yorum Ekle',
+      commentAnonymously: 'Anonim yorum yap',
       noComment: 'Henüz yorum yok',
       loading: 'Akış yükleniyor...',
       refreshing: 'Akış yenileniyor...',
@@ -62,6 +64,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
   const [deletingPostId, setDeletingPostId] = useState(null);
   const [currentDoctorName, setCurrentDoctorName] = useState('');
   const [commentDrafts, setCommentDrafts] = useState({});
+  const [commentAnonymous, setCommentAnonymous] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -148,10 +151,11 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
     if (!trimmedComment) return;
 
     setPostingCommentId(postId);
+    const isAnonComment = commentAnonymous[postId] ?? false;
     try {
       const createdComment = await createSecondOpinionComment(postId, {
-        is_anonymous: false,
-        author_name: doctorProfile?.name || 'Doctor',
+        is_anonymous: isAnonComment,
+        author_name: isAnonComment ? null : (doctorProfile?.name || 'Doctor'),
         comment_text: trimmedComment,
       });
 
@@ -165,17 +169,15 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
                   {
                     id: createdComment.id,
                     text: createdComment.comment_text,
-                    author: createdComment.author_name,
+                    author: createdComment.author_name || 'Anonymous',
                   },
                 ],
               }
             : post
         )
       );
-        setCommentDrafts((prev) => ({
-          ...prev,
-          [postId]: '',
-        }));
+      setCommentDrafts((prev) => ({ ...prev, [postId]: '' }));
+      setCommentAnonymous((prev) => ({ ...prev, [postId]: false }));
     } catch (err) {
         setError(err.message || loadErrorText);
     } finally {
@@ -371,12 +373,12 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
                     </div>
                   )}
 
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 flex gap-2 flex-wrap items-center">
                     <input
                       type="text"
                       value={draftValue}
                       placeholder={t.addComment}
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm"
                       disabled={postingCommentId === post.id}
                       onChange={(e) =>
                         setCommentDrafts((prev) => ({
@@ -391,6 +393,17 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
                         }
                       }}
                     />
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-600 select-none whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={commentAnonymous[post.id] ?? false}
+                        onChange={(e) =>
+                          setCommentAnonymous((prev) => ({ ...prev, [post.id]: e.target.checked }))
+                        }
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span>{t.commentAnonymously}</span>
+                    </label>
                     <button
                       type="button"
                       onClick={() => addComment(post.id, draftValue)}

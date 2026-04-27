@@ -35,7 +35,9 @@ async function request(path, options = {}) {
     } catch {
       // keep default error
     }
-    throw new Error(message);
+    const err = new Error(message);
+    err.status = response.status; // Expose HTTP status for caller-side error mapping
+    throw err;
   }
 
   return response.json();

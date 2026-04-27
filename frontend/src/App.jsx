@@ -255,13 +255,9 @@ function App() {
   };
 
   const handleGuestAccess = () => {
-    // Skip login, go straight to the tutorial and then analysis
     setLoggedIn(false);
     clearAccessToken();
-    if (pendingTab) {
-      setSelectedTab(pendingTab);
-      setPendingTab(null);
-    }
+    // pendingTab is preserved — applied after tutorial in handleTutorialContinue/Skip
     setShowLogin(false);
     setShowRegister(false);
     setShowTutorial(true);
@@ -300,10 +296,18 @@ function App() {
 
   const handleTutorialContinue = () => {
     setShowTutorial(false);
+    if (pendingTab) {
+      setSelectedTab(pendingTab);
+      setPendingTab(null);
+    }
   };
 
   const handleTutorialSkip = () => {
     setShowTutorial(false);
+    if (pendingTab) {
+      setSelectedTab(pendingTab);
+      setPendingTab(null);
+    }
   };
 
   const handleAuthCancel = () => {
@@ -318,6 +322,7 @@ function App() {
 
   const handleLoginBack = () => {
     clearAccessToken();
+    setPendingTab(null); // Cancel any pending redirect if user abandons login
     setUserType(null);
     setShowLanding(true);
     setShowLogin(false);
@@ -741,6 +746,7 @@ function App() {
                       )}
                       <ImageUploader
                         language={language}
+                        userType={userType}
                         dermFiles={dermFiles}
                         dermPreviews={dermPreviews}
                         clinFile={clinFile}

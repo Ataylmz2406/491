@@ -34,6 +34,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       posting: 'Posting...',
       comments: 'Comments',
       addComment: 'Add Comment',
+      commentAnonymously: 'Comment anonymously',
       noCaption: 'No notes',
       noComments: 'No comments yet',
       patientHistory: 'History / Metadata',
@@ -60,6 +61,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       posting: 'Gönderiliyor...',
       comments: 'Yorumlar',
       addComment: 'Yorum Ekle',
+      commentAnonymously: 'Anonim yorum yap',
       noCaption: 'Not yok',
       noComments: 'Henüz yorum yok',
       patientHistory: 'Geçmiş / Metaveri',
@@ -81,7 +83,9 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
   const [posts, setPosts] = useState([]);
   const [error, setError] = useState('');
   const [posting, setPosting] = useState(false);
+  const [postingCommentId, setPostingCommentId] = useState(null);  // tracks which post comment is being submitted
   const [commentDrafts, setCommentDrafts] = useState({});
+  const [commentAnonymous, setCommentAnonymous] = useState({});   // per-post anonymous comment checkbox
   const [isAnonymous, setIsAnonymous] = useState(false);
 
   useEffect(() => {
@@ -254,6 +258,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
     setCurrentHypothesis('');
     setDraft({ uploads: [], caption: '' });
     setError('');
+    setIsAnonymous(false); // reset anonymous toggle after submit
   };
 
   const postOpinion = async () => {
@@ -298,11 +303,13 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
     if (!trimmedComment) return;
 
     setError('');
+    setPostingCommentId(postId); // immediately disable button to prevent duplicates
+    const isAnonComment = commentAnonymous[postId] ?? false;
 
     try {
       const createdComment = await createSecondOpinionComment(postId, {
-        is_anonymous: false,
-        author_name: doctorName.trim() || 'Doctor',
+        is_anonymous: isAnonComment,
+        author_name: isAnonComment ? null : (doctorName.trim() || 'Doctor'),
         comment_text: trimmedComment,
       });
 
@@ -316,7 +323,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
                   {
                     id: createdComment.id,
                     text: createdComment.comment_text,
-                    author: createdComment.author_name,
+                    author: createdComment.author_name || 'Anonymous',
                   },
                 ],
               }
@@ -324,12 +331,13 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
         )
       );
 
-        setCommentDrafts((prev) => ({
-          ...prev,
-          [postId]: '',
-        }));
+      // Clear the draft and anonymous toggle for this post
+      setCommentDrafts((prev) => ({ ...prev, [postId]: '' }));
+      setCommentAnonymous((prev) => ({ ...prev, [postId]: false }));
     } catch (err) {
       setError(`${t.errorPrefix} ${err.message || 'Unknown error'}`);
+    } finally {
+      setPostingCommentId(null);
     }
   };
 
@@ -537,7 +545,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
                     <p className="mb-3 text-sm text-gray-500">{t.noComments}</p>
                   )}
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap items-center">
                     <input
                       type="text"
                       value={postCommentDraft}
@@ -548,7 +556,8 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
                         }))
                       }
                       placeholder={t.addComment}
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      disabled={postingCommentId === post.id}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -556,12 +565,26 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
                         }
                       }}
                     />
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-600 select-none whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={commentAnonymous[post.id] ?? false}
+                        onChange={(e) =>
+                          setCommentAnonymous((prev) => ({ ...prev, [post.id]: e.target.checked }))
+                        }
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span>{t.commentAnonymously}</span>
+                    </label>
                     <button
                       type="button"
                       onClick={() => addComment(post.id, postCommentDraft)}
-                      className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white"
+                      disabled={postingCommentId === post.id || !postCommentDraft.trim()}
+                      className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
-                      <MessageSquareText className="h-4 w-4" />
+                      {postingCommentId === post.id
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <MessageSquareText className="h-4 w-4" />}
                       {t.addComment}
                     </button>
                   </div>
