@@ -16,10 +16,12 @@ export class StorageService {
         caseData.id = `case_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       }
 
+      const existingCase = caseData.id ? this.getCase(caseData.id) : null;
+      const now = new Date().toISOString();
       const enrichedCase = {
         ...caseData,
-        savedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        savedAt: existingCase?.savedAt || now,
+        updatedAt: now,
       };
 
       // Save case
@@ -137,10 +139,8 @@ export class StorageService {
    */
   static _updateIndex(caseId) {
     const index = this._getIndex();
-    if (!index.includes(caseId)) {
-      index.unshift(caseId);
-      localStorage.setItem(INDEX_KEY, JSON.stringify(index));
-    }
+      const nextIndex = [caseId, ...index.filter(id => id !== caseId)];
+      localStorage.setItem(INDEX_KEY, JSON.stringify(nextIndex));
   }
 
   /**

@@ -1,30 +1,23 @@
-import { getAccessToken } from './authService';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-
-function getAuthHeaders() {
-  const token = getAccessToken();
-  if (!token) {
-    throw new Error('AUTH_REQUIRED');
-  }
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-}
+import { authFetch } from './authService';
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+  let response;
+  try {
+    response = await authFetch(path, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+      ...options,
+    });
+  } catch {
+    throw new Error('We could not reach the server. Please check your connection and try again.');
+  }
 
   if (!response.ok) {
-    let message = `Request failed with status ${response.status}`;
+    let message = response.status >= 500
+      ? 'The labeling service is temporarily unavailable. Please try again in a moment.'
+      : `Request failed with status ${response.status}`;
     try {
       const data = await response.json();
       message = data.detail || message;

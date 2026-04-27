@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Calendar, AlertCircle, Search, ChevronRight } from 'lucide-react';
+import { Calendar, AlertCircle, Search } from 'lucide-react';
 import { useCaseContext } from '../context/CaseContext';
 
 const CLASS_NAME_MAP = {
@@ -16,7 +16,7 @@ const CLASS_NAME_MAP = {
   "VASC": "Vascular lesions and hemorrhage"
 };
 
-export default function PatientHistory({ language = 'en', userType, questionMetadata, onCaseSelect }) {
+export default function PatientHistory({ language = 'en', onCaseSelect }) {
   const { state: caseState, loadCase, searchPatientCases } = useCaseContext();
   const [searchPatientId, setSearchPatientId] = useState('');
   const [filteredCases, setFilteredCases] = useState([]);
@@ -84,36 +84,23 @@ export default function PatientHistory({ language = 'en', userType, questionMeta
     }
   };
 
-  const getStatusColor = (status) => {
-    if (status?.toLowerCase().includes('treat')) return 'bg-green-100 text-green-800';
-    if (status?.toLowerCase().includes('monitor')) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-blue-100 text-blue-800';
-  };
-
-  const getDiagnosisColor = (diagnosis) => {
-    if (diagnosis?.toLowerCase().includes('melanoma') || diagnosis?.toLowerCase().includes('carcinoma')) {
-      return 'text-red-600';
-    }
-    return 'text-green-600';
-  };
-
   return (
-    <div className="p-8 max-h-full overflow-y-auto">
+    <div className="max-h-full overflow-y-auto p-5 sm:p-6">
       {/* Search Section */}
-      <div className="mb-8 pb-8 border-b border-gray-200">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">{t.searchPatient}</h3>
-        <div className="flex gap-2">
+      <div className="mb-6 border-b border-slate-200 pb-6">
+        <h3 className="mb-4 text-lg font-bold text-slate-900">{t.searchPatient}</h3>
+        <div className="flex flex-col gap-2 sm:flex-row">
           <input
             type="text"
             value={searchPatientId}
             onChange={(e) => setSearchPatientId(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
             placeholder={t.patientIdLabel}
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            className="flex-1 rounded-lg border border-slate-300 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           <button
             onClick={handleSearch}
-            className="px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium flex items-center gap-2 whitespace-nowrap"
+            className="flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand-600 px-6 py-3 font-medium text-white transition-colors hover:bg-brand-700"
           >
             <Search className="w-4 h-4" />
             {t.search}
@@ -136,26 +123,26 @@ export default function PatientHistory({ language = 'en', userType, questionMeta
       ) : (
         <div>
           {/* Patient Header */}
-          <div className="mb-8 pb-8 border-b border-gray-200">
-            <div className="grid grid-cols-3 gap-6">
+          <div className="mb-6 border-b border-slate-200 pb-6">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Patient Name</p>
-                <p className="text-xl font-bold text-gray-900">—</p>
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">Patient Name</p>
+                <p className="text-xl font-bold text-slate-900">—</p>
               </div>
               <div>
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Patient ID</p>
-                <p className="text-xl font-bold text-gray-900">{searchPatientId}</p>
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">Patient ID</p>
+                <p className="text-xl font-bold text-slate-900">{searchPatientId}</p>
               </div>
               <div>
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Date of Birth</p>
-                <p className="text-xl font-bold text-gray-900">—</p>
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">Date of Birth</p>
+                <p className="text-xl font-bold text-slate-900">—</p>
               </div>
             </div>
           </div>
 
           {/* Previous Diagnoses */}
           <div>
-            <h3 className="text-lg font-bold text-gray-900 mb-4">
+            <h3 className="mb-4 text-lg font-bold text-slate-900">
               {t.previousDiagnoses} ({filteredCases.length})
             </h3>
             <div className="space-y-3">
@@ -175,7 +162,7 @@ export default function PatientHistory({ language = 'en', userType, questionMeta
                   <button
                     key={caseItem.id}
                     onClick={() => handleCaseClick(caseItem.id)}
-                    className="w-full p-4 border border-gray-200 rounded-lg hover:border-teal-300 hover:bg-teal-50 transition-all text-left group"
+                    className="group w-full rounded-lg border border-slate-200 p-4 text-left transition-all hover:border-brand-300 hover:bg-brand-50"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -203,7 +190,7 @@ export default function PatientHistory({ language = 'en', userType, questionMeta
                       </div>
                       <div className="text-right">
                         <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">{t.confidence}</p>
-                        <p className="text-2xl font-bold text-teal-600">{caseItem.confidence ? caseItem.confidence.toFixed(1) : 'N/A'}%</p>
+                        <p className="text-2xl font-bold text-brand-700">{caseItem.confidence ? caseItem.confidence.toFixed(1) : 'N/A'}%</p>
                       </div>
                     </div>
                   </button>

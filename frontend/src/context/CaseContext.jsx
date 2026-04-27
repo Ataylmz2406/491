@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useReducer, useCallback } from 'react';
 import StorageService from '../services/storageService';
 
@@ -176,6 +177,24 @@ function caseReducer(state, action) {
         currentCase: action.payload,
       };
 
+    case 'SET_CURRENT_CASE':
+      return {
+        ...state,
+        currentCase: action.payload,
+      };
+
+    case 'CLEAR_CASE_NOTES':
+      return {
+        ...state,
+        currentCase: {
+          ...state.currentCase,
+          clinicalNotes: '',
+          doctorOverride: null,
+          followupDate: null,
+          tags: [],
+        },
+      };
+
     default:
       return state;
   }
@@ -207,6 +226,7 @@ export function CaseProvider({ children }) {
       const saved = StorageService.saveCase(caseToSave);
       
       dispatch({ type: 'SET_RECENT_CASES', payload: StorageService.getRecentCases() });
+      dispatch({ type: 'SET_CURRENT_CASE', payload: saved });
       dispatch({ type: 'SET_LOADING', payload: false });
       dispatch({ type: 'SET_ERROR', payload: null });
       
@@ -253,11 +273,18 @@ export function CaseProvider({ children }) {
     try {
       StorageService.deleteCase(caseId);
       dispatch({ type: 'SET_RECENT_CASES', payload: StorageService.getRecentCases() });
+      dispatch({
+        type: 'SET_SEARCH_RESULTS',
+        payload: state.searchResults.filter((item) => item.id !== caseId),
+      });
+      if (state.currentCase.id === caseId) {
+        dispatch({ type: 'RESET_CURRENT_CASE' });
+      }
       dispatch({ type: 'SET_ERROR', payload: null });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error.message });
     }
-  }, []);
+  }, [state.currentCase.id, state.searchResults]);
 
   const resetCurrentCase = useCallback(() => {
     dispatch({ type: 'RESET_CURRENT_CASE' });

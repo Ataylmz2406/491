@@ -1,22 +1,23 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-import { getAccessToken } from './authService';
+import { authFetch } from './authService';
 
 async function request(path, options = {}) {
-  const token = getAccessToken();
-  if (!token) {
-    throw new Error('AUTH_REQUIRED');
+  let response;
+  try {
+    response = await authFetch(path, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+      ...options,
+    });
+  } catch {
+    throw new Error('We could not reach the server. Please check your connection and try again.');
   }
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
 
   if (!response.ok) {
-    let message = `Request failed with status ${response.status}`;
+    let message = response.status >= 500
+      ? 'The second-opinion service is temporarily unavailable. Please try again in a moment.'
+      : `Request failed with status ${response.status}`;
     try {
       const data = await response.json();
       message = data.detail || message;

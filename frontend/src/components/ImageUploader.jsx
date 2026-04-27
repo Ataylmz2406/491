@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Camera, ImageIcon, Upload, X, ZoomIn } from 'lucide-react';
+import { Camera, Crop, ImageIcon, RotateCw, Upload, X, ZoomIn } from 'lucide-react';
 
 export default function ImageUploader({
     language = 'en',
     userType = null,
     dermFiles, dermPreviews, clinFile, clinPreview, handleFileChange, clearFile,
+    editDermoscopicImage,
     showClinical = true
 }) {
     const [zoomedImage, setZoomedImage] = useState(null);
@@ -19,7 +20,7 @@ export default function ImageUploader({
         optional: 'Optional',
         userMayUpload: 'User may upload up to four photos',
         uploadDermoscopy: userType === 'personal' ? 'Upload Close-up' : 'Upload Dermoscopy',
-        uploadDermoscopyDesc: 'High-resolution close-up (JPG, PNG) - Up to 4 photos',
+        uploadDermoscopyDesc: 'High-resolution close-up (JPG, PNG, WebP, HEIC/HEIF) - Up to 4 photos, 8 MB each',
         uploadMore: (count) => `Upload more (${count}/4)`,
         uploadClinicalView: 'Upload Clinical View',
         clinicalDesc: 'Macro/Regional photo',
@@ -27,7 +28,9 @@ export default function ImageUploader({
         chooseImages: 'Choose images',
         seeExampleImages: 'see example images',
         orDragImagesHere: 'or drag images here',
-        orDragImageHere: 'or drag an image here'
+        orDragImageHere: 'or drag an image here',
+        rotateImage: 'Rotate image',
+        cropSquare: 'Center crop'
       },
       tr: {
         dermoscopicHeader: userType === 'personal' ? 'Yakın Çekim Fotoğraf' : 'Dermatoskopik',
@@ -36,7 +39,7 @@ export default function ImageUploader({
         optional: 'Opsiyonel',
         userMayUpload: 'Kullanıcı en fazla dört fotoğraf yükleyebilir',
         uploadDermoscopy: userType === 'personal' ? 'Yakın Çekim Yükle' : 'Dermatoskopi Yükle',
-        uploadDermoscopyDesc: 'Yüksek çözünürlüklü yakın çekim (JPG, PNG) - En fazla 4 fotoğraf',
+        uploadDermoscopyDesc: 'Yüksek çözünürlüklü yakın çekim (JPG, PNG, WebP, HEIC/HEIF) - En fazla 4 fotoğraf, her biri 8 MB',
         uploadMore: (count) => `Daha fazla yükle (${count}/4)`,
         uploadClinicalView: 'Klinik Görünüm Yükle',
         clinicalDesc: 'Makro/Bölgesel fotoğraf',
@@ -44,7 +47,9 @@ export default function ImageUploader({
         chooseImages: 'Görüntüleri seç',
         seeExampleImages: 'örnek resimleri göster',
         orDragImagesHere: 'veya resimleri buraya sürükleyin',
-        orDragImageHere: 'veya bir resmi buraya sürükleyin'
+        orDragImageHere: 'veya bir resmi buraya sürükleyin',
+        rotateImage: 'Görüntüyü döndür',
+        cropSquare: 'Ortadan kırp'
       }
     };
 
@@ -70,7 +75,7 @@ export default function ImageUploader({
         if (type === 'derm') setIsDraggingDerm(false);
         if (type === 'clin') setIsDraggingClin(false);
 
-        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+        const files = Array.from(e.dataTransfer.files);
         if (files.length === 0) return;
 
         // Simulate file input change
@@ -88,7 +93,7 @@ export default function ImageUploader({
     };
 
     return (
-        <div className="flex flex-col gap-6 mb-6">
+        <div className="mb-5 flex flex-col gap-5">
             {/* Zoom Modal */}
             {zoomedImage && (
                 <div 
@@ -116,7 +121,7 @@ export default function ImageUploader({
 
             {/* Dermoscopic */}
             <div 
-                className={`relative p-6 transition-all duration-300 bg-white border-2 border-dashed rounded-xl ${isDraggingDerm ? 'border-brand-500 bg-brand-50 shadow-lg scale-[1.01]' : ''} ${dermFiles.length === 0 ? 'border-brand-300 hover:border-brand-500 hover:bg-brand-50/50 hover:shadow-lg hover:scale-[1.01]' : 'border-brand-600 bg-brand-50/20 shadow-md'}`}
+                className={`relative rounded-lg border-2 border-dashed bg-white p-5 transition-all duration-300 ${isDraggingDerm ? 'scale-[1.01] border-brand-500 bg-brand-50 shadow-lg' : ''} ${dermFiles.length === 0 ? 'border-brand-300 hover:border-brand-500 hover:bg-brand-50/50 hover:shadow-lg hover:scale-[1.01]' : 'border-brand-600 bg-brand-50/20 shadow-md'}`}
                 onDragOver={(e) => handleDragOver(e, 'derm')}
                 onDragLeave={(e) => handleDragLeave(e, 'derm')}
                 onDrop={(e) => handleDrop(e, 'dermoscopic')}
@@ -155,7 +160,7 @@ export default function ImageUploader({
                         <input 
                             type="file" 
                             className="hidden" 
-                            accept="image/*"
+                            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                             multiple
                             onChange={(e) => handleFileChange(e, 'dermoscopic')}
                             disabled={dermFiles.length >= 4}
@@ -190,6 +195,32 @@ export default function ImageUploader({
                                     >
                                         <X className="w-4 h-4 text-white" />
                                     </button>
+                                    <div className="absolute bottom-2 left-2 right-2 z-10 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                        <button
+                                            type="button"
+                                            title={t.rotateImage}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                editDermoscopicImage?.(index, 'rotate-right');
+                                            }}
+                                            className="inline-flex flex-1 items-center justify-center gap-1 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-white"
+                                        >
+                                            <RotateCw className="h-3.5 w-3.5" />
+                                            {t.rotateImage}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            title={t.cropSquare}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                editDermoscopicImage?.(index, 'crop-square');
+                                            }}
+                                            className="inline-flex flex-1 items-center justify-center gap-1 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-white"
+                                        >
+                                            <Crop className="h-3.5 w-3.5" />
+                                            {t.cropSquare}
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -210,7 +241,7 @@ export default function ImageUploader({
                                 <input 
                                     type="file" 
                                     className="hidden" 
-                                    accept="image/*"
+                                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                                     multiple
                                     onChange={(e) => handleFileChange(e, 'dermoscopic')}
                                     disabled={dermFiles.length >= 4}
@@ -224,14 +255,14 @@ export default function ImageUploader({
             {/* Clinical */}
             {showClinical && (
               <div 
-                className={`relative p-6 transition-all duration-300 bg-white border-2 border-dashed rounded-xl ${isDraggingClin ? 'border-indigo-500 bg-indigo-50 shadow-lg scale-[1.01]' : ''} ${!clinFile ? 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/30 hover:shadow-lg hover:scale-[1.01]' : 'border-indigo-600 bg-indigo-50/20 shadow-md'}`}
+                className={`relative rounded-lg border-2 border-dashed bg-white p-5 transition-all duration-300 ${isDraggingClin ? 'scale-[1.01] border-slate-500 bg-slate-50 shadow-lg' : ''} ${!clinFile ? 'border-slate-300 hover:border-brand-400 hover:bg-slate-50 hover:shadow-lg hover:scale-[1.01]' : 'border-brand-600 bg-brand-50/20 shadow-md'}`}
                 onDragOver={(e) => handleDragOver(e, 'clin')}
                 onDragLeave={(e) => handleDragLeave(e, 'clin')}
                 onDrop={(e) => handleDrop(e, 'clinical')}
               >
                 <div className="flex justify-between mb-4">
                     <h3 className="flex items-center gap-2 font-semibold text-gray-700 text-lg">
-                        <ImageIcon className="w-8 h-8 text-indigo-600" /> {t.clinicalHeader}
+                        <ImageIcon className="w-8 h-8 text-brand-600" /> {t.clinicalHeader}
                         <span className="text-[13px] font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full uppercase">{t.optional}</span>
                     </h3>
                     {clinFile && <button onClick={() => clearFile('clinical')}><X className="w-8 h-8 text-gray-400 hover:text-red-500" /></button>}
@@ -239,11 +270,11 @@ export default function ImageUploader({
 
                 {!clinPreview ? (
                     <label className="flex flex-col items-center justify-center h-56 cursor-pointer group">
-                        <div className="p-4 mb-3 bg-gray-100 rounded-full group-hover:bg-indigo-100 transition-colors group-hover:scale-110 duration-300"><Upload className="w-14 h-14 text-gray-500 group-hover:text-indigo-600 transition-colors" /></div>
-                        <span className="text-lg font-medium text-gray-600 group-hover:text-indigo-700 transition-colors">{t.uploadClinicalView}</span>
+                        <div className="p-4 mb-3 bg-slate-100 rounded-full group-hover:bg-brand-100 transition-colors group-hover:scale-110 duration-300"><Upload className="w-14 h-14 text-slate-500 group-hover:text-brand-600 transition-colors" /></div>
+                        <span className="text-lg font-medium text-slate-600 group-hover:text-brand-700 transition-colors">{t.uploadClinicalView}</span>
                         <span className="text-base text-gray-400 mt-1">{t.clinicalDesc}</span>
-                        <span className="text-sm text-indigo-600 font-medium mt-3">{t.orDragImageHere}</span>
-                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'clinical')} />
+                        <span className="mt-3 text-sm font-medium text-brand-700">{t.orDragImageHere}</span>
+                        <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(e) => handleFileChange(e, 'clinical')} />
                     </label>
                 ) : (
                     <div className="relative h-44 w-44 mx-auto overflow-hidden bg-black rounded-lg group">

@@ -16,8 +16,12 @@ export default function DiagnosisResult({ language = 'en', result, location, use
         benign: 'Benign',
         opticalWarning: 'Optical Quality Warning',
         clinicalClipboard: 'Clinical Note copied to clipboard.',
+        copyNote: 'Copy Note',
+        classLabel: 'Class',
+        probabilityPercent: 'Probability (%)',
         exportPDF: 'Export PDF Report',
-        pdfSuccess: 'PDF exported successfully!'
+        pdfSuccess: 'PDF exported successfully!',
+        pdfError: 'Error exporting PDF'
       },
       tr: {
         title: 'Teşhis Sonucu',
@@ -28,9 +32,15 @@ export default function DiagnosisResult({ language = 'en', result, location, use
         allClassPredictions: 'Diğer Sınıf Tahminleri',
         malignant: 'Kötü Huylu',
         benign: 'İyi Huylu',
-        opticalWarning: 'Optik Kalite Uyarısı',        probability: 'Olasılık',        clinicalClipboard: 'Klinik not panoya kopyalandı.',
+        opticalWarning: 'Optik Kalite Uyarısı',
+        probability: 'Olasılık',
+        clinicalClipboard: 'Klinik not panoya kopyalandı.',
+        copyNote: 'Notu Kopyala',
+        classLabel: 'Sınıf',
+        probabilityPercent: 'Olasılık (%)',
         exportPDF: 'PDF Rapor Dışa Aktar',
-        pdfSuccess: 'PDF başarıyla dışa aktarıldı!'
+        pdfSuccess: 'PDF başarıyla dışa aktarıldı!',
+        pdfError: 'PDF dışa aktarılamadı'
       }
     };
 
@@ -96,9 +106,9 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
         } catch (error) {
             console.error('Error exporting PDF:', error);
             if (showToast) {
-                showToast('Error exporting PDF');
+                showToast(t.pdfError);
             } else {
-                alert('Error exporting PDF');
+                alert(t.pdfError);
             }
         }
     };
@@ -124,25 +134,24 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
     // Split into Malignant and Benign groups, each sorted descending
     const malignantPreds = sortedPredictions.filter(p => MALIGNANT_CLASSES.has(p.class));
     const benignPreds = sortedPredictions.filter(p => !MALIGNANT_CLASSES.has(p.class));
-
     return (
-        <div className="mt-2 overflow-hidden bg-white border border-gray-200 shadow-xl rounded-2xl animate-fade-in">
+        <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm animate-fade-in">
             <div className="p-4">
-                <h3 className="mb-3 text-lg font-bold text-gray-900">{t.title}</h3>
+                <h3 className="mb-3 text-lg font-bold text-slate-900">{t.title}</h3>
                 
                 {loading ? (
                     <div className="space-y-4 animate-fade-in-up">
-                        <div className="h-20 rounded-xl skeleton" />
-                        <div className="flex gap-4">
-                            <div className="h-12 w-full rounded-lg skeleton" />
-                            <div className="h-12 w-1/3 rounded-lg skeleton" />
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="h-3 rounded-full skeleton" />
+                            <div className="h-3 rounded-full skeleton" />
+                            <div className="h-3 rounded-full skeleton" />
                         </div>
-                        <div className="h-48 rounded-lg skeleton mt-4" />
+                        <div className="h-28 rounded-lg skeleton" />
                     </div>
                 ) : result ? (
                     <div aria-live="polite">
                         {/* AI Prediction Section */}
-                        <div className={`p-4 mb-3 rounded-xl border ${getResultColor(result.prediction)} flex items-center gap-4`}>
+                        <div className={`mb-3 flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center ${getResultColor(result.prediction)}`}>
                             {result.prediction.toLowerCase().includes('malignant')
                                 ? <AlertCircle className="shrink-0 w-12 h-12" />
                                 : <CheckCircle className="shrink-0 w-12 h-12" />
@@ -151,19 +160,19 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                 <div className="text-sm font-bold uppercase opacity-60">{t.aiPrediction}</div>
                                 <div className="text-base font-bold text-gray-800 truncate">{CLASS_NAME_MAP[result.prediction] || result.prediction}</div>
                             </div>
-                            <div className="flex flex-col items-end" style={{minWidth: '110px'}}>
+                            <div className="flex w-full flex-col sm:min-w-[120px] sm:items-end">
                                 <div className="text-sm font-bold uppercase opacity-60">{t.confidence}</div>
                                 <div className="text-base font-bold text-gray-800">{result.confidence_score.toFixed(1)}%</div>
                             </div>
                         </div>
 
                         {/* Top Differential Class Section */}
-                        <div className="mb-3 flex items-center gap-4 px-4">
+                        <div className="mb-3 flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:gap-4">
                             <div className="flex-1 min-w-0">
                                 <div className="text-sm font-bold uppercase opacity-60">{t.topDifferential}</div>
                                 <div className="text-base font-bold text-gray-800 truncate">{CLASS_NAME_MAP[result.details?.top_class] || result.details?.top_class}</div>
                             </div>
-                            <div className="flex flex-col items-end" style={{minWidth: '110px'}}>
+                            <div className="flex flex-col sm:items-end" style={{minWidth: '110px'}}>
                                 <div className="text-sm font-bold uppercase opacity-60">{t.probability}</div>
                                 <div className="text-base font-bold text-gray-800">{result.details?.top_prob?.toFixed(2)}%</div>
                             </div>
@@ -178,15 +187,17 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                         <table className="min-w-full text-sm text-left border rounded-lg">
                                             <thead>
                                                 <tr className="bg-gray-100">
-                                                    <th className="px-3 py-2 font-semibold">Class</th>
-                                                    <th className="px-3 py-2 font-semibold text-right" style={{minWidth: '110px'}}>Probability (%)</th>
+                                                    <th className="px-3 py-2 font-semibold">{t.classLabel}</th>
+                                                    <th className="px-3 py-2 font-semibold text-right" style={{minWidth: '110px'}}>{t.probabilityPercent}</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {sortedPredictions.map((pred) => (
                                                     <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-green-50 font-bold' : ''}>
                                                         <td className="px-3 py-2">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
-                                                        <td className="px-3 py-2 text-right" style={{minWidth: '110px'}}>{pred.prob.toFixed(2)}%</td>
+                                                        <td className="px-3 py-2 text-right" style={{minWidth: '160px'}}>
+                                                            {pred.prob.toFixed(2)}%
+                                                        </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -198,8 +209,8 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                     <table className="w-full text-sm text-left border rounded-lg">
                                         <thead>
                                             <tr className="bg-gray-100">
-                                                <th className="px-3 py-1.5 font-semibold">Class</th>
-                                                <th className="px-3 py-1.5 font-semibold text-right" style={{minWidth: '110px'}}>Probability (%)</th>
+                                                <th className="px-3 py-1.5 font-semibold">{t.classLabel}</th>
+                                                <th className="px-3 py-1.5 font-semibold text-right" style={{minWidth: '110px'}}>{t.probabilityPercent}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -208,7 +219,9 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                             {malignantPreds.map((pred) => (
                                                 <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-red-50 font-bold' : ''}>
                                                     <td className="px-3 py-1.5">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
-                                                    <td className="px-3 py-1.5 text-right" style={{minWidth: '110px'}}>{pred.prob.toFixed(2)}%</td>
+                                                    <td className="px-3 py-1.5 text-right" style={{minWidth: '160px'}}>
+                                                        {pred.prob.toFixed(2)}%
+                                                    </td>
                                                 </tr>
                                             ))}
                                             {/* Benign section */}
@@ -216,7 +229,9 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                             {benignPreds.map((pred) => (
                                                 <tr key={pred.class} className={pred.class === result.details?.top_class ? 'bg-green-50 font-bold' : ''}>
                                                     <td className="px-3 py-1.5">{CLASS_NAME_MAP[pred.class] || pred.class}</td>
-                                                    <td className="px-3 py-1.5 text-right" style={{minWidth: '110px'}}>{pred.prob.toFixed(2)}%</td>
+                                                    <td className="px-3 py-1.5 text-right" style={{minWidth: '160px'}}>
+                                                        {pred.prob.toFixed(2)}%
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -244,7 +259,7 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                 title={t.clinicalClipboard}
                             >
                                 <Clipboard className="w-4 h-4" />
-                                Copy Note
+                                {t.copyNote}
                             </button>
                             <button
                                 onClick={exportToPDF}

@@ -35,8 +35,6 @@ export const validatePassword = (password) => {
 };
 
 export const getPasswordStrength = (password) => {
-  const validation = validatePassword(password);
-
   if (!password) {
     return { strength: 0, label: 'No password' };
   }

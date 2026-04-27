@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Calendar, MapPin, Activity, LogOut } from 'lucide-react';
+import { getAccessToken } from '../services/authService';
 
 const CLASS_NAME_MAP = {
   "AKIEC": "Actinic keratosis / intraepidermal carcinoma",
@@ -66,7 +67,7 @@ export default function MyAccount({ language = 'en', loginData, userType, onBack
       setLoading(true);
       setError(null);
       try {
-        const token = localStorage.getItem('suderm_access_token');
+        const token = getAccessToken();
         const response = await fetch('/api/doctor/analyses', {
           method: 'GET',
           headers: {
@@ -157,16 +158,16 @@ export default function MyAccount({ language = 'en', loginData, userType, onBack
                 <p className="text-lg text-gray-900 pointer-events-none">{loginData.hospital}</p>
               </div>
             )}
-            {userType === 'doctor' && loginData?.doctorId && (
+            {userType === 'doctor' && (loginData?.doctor_id || loginData?.doctorId) && (
               <div>
                 <p className="text-sm font-medium text-gray-600">{t.doctorId}</p>
-                <p className="text-lg text-gray-900 pointer-events-none">{loginData.doctorId}</p>
+                <p className="text-lg text-gray-900 pointer-events-none">{loginData.doctor_id || loginData.doctorId}</p>
               </div>
             )}
-            {userType === 'doctor' && loginData?.doctorName && (
+            {userType === 'doctor' && (loginData?.full_name || loginData?.doctorName) && (
               <div>
                 <p className="text-sm font-medium text-gray-600">{t.name}</p>
-                <p className="text-lg text-gray-900 pointer-events-none">{loginData.doctorName}</p>
+                <p className="text-lg text-gray-900 pointer-events-none">{loginData.full_name || loginData.doctorName}</p>
               </div>
             )}
           </div>

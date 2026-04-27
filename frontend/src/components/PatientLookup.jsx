@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, X, ChevronRight, Calendar, AlertCircle } from 'lucide-react';
 import { useCaseContext } from '../context/CaseContext';
 
@@ -101,7 +101,7 @@ export default function PatientLookup({ language = 'en', onCaseSelect, currentPa
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
           <div className="w-full max-w-2xl max-h-[80vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-fade-in">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-brand-50 to-blue-50">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 p-6">
               <h2 className="text-xl font-bold text-gray-900">{t.title}</h2>
               <button
                 onClick={() => setIsOpen(false)}
@@ -196,7 +196,7 @@ export default function PatientLookup({ language = 'en', onCaseSelect, currentPa
                               {caseItem.doctorOverride && (
                                 <div>
                                   <p className="text-xs text-gray-500 uppercase">Your Assessment</p>
-                                  <p className="font-semibold text-blue-600">{caseItem.doctorOverride}</p>
+                                  <p className="font-semibold text-brand-700">{caseItem.doctorOverride}</p>
                                 </div>
                               )}
                             </div>

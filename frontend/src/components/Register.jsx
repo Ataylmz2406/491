@@ -144,9 +144,9 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
   // Step 1: Choose User Type
   if (step === 1) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 p-4">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-blue-100">
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-xl">
             <h1 className="text-3xl font-bold text-center text-slate-800 mb-2">Create Account</h1>
             <p className="text-center text-gray-600 mb-8">Choose your account type to get started</p>
 
@@ -157,8 +157,8 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
                   onClick={() => setUserType(type)}
                   className={`w-full p-4 rounded-lg border-2 transition-all text-left font-medium capitalize ${
                     userType === type
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 hover:border-blue-300 text-gray-700'
+                      ? 'border-brand-500 bg-brand-50 text-brand-700'
+                      : 'border-slate-200 text-slate-700 hover:border-brand-300'
                   }`}
                 >
                   {type === 'doctor' && '👨‍⚕️ Doctor Account'}
@@ -185,7 +185,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
               <button
                 onClick={handleStep1Continue}
                 disabled={!userType}
-                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-medium transition"
+                className="flex-1 rounded-lg bg-brand-600 px-4 py-3 font-medium text-white transition hover:bg-brand-700 disabled:bg-slate-400"
               >
                 Continue
               </button>
@@ -193,7 +193,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
 
             <p className="text-center text-sm text-gray-600 mt-6">
               Already have an account?{' '}
-              <button onClick={onSwitchToLogin} className="text-blue-600 hover:text-blue-700 font-medium">
+              <button onClick={onSwitchToLogin} className="font-medium text-brand-700 hover:text-brand-800">
                 Sign in
               </button>
             </p>
@@ -206,9 +206,9 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
   // Step 2: Personal Information
   if (step === 2) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 p-4">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-blue-100">
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-xl">
             <div className="mb-8">
               <button
                 onClick={() => setStep(1)}
@@ -231,7 +231,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
                   type="text"
                   value={formData.fullName}
                   onChange={(e) => handleInputChange('fullName', e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   placeholder="John Smith"
                 />
               </div>
@@ -246,7 +246,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   placeholder="you@example.com"
                 />
               </div>
@@ -261,7 +261,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
                   type="tel"
                   value={formData.phoneNumber}
                   onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   placeholder="+1 (555) 123-4567"
                 />
               </div>
@@ -278,7 +278,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
                       type="text"
                       value={formData.hospitalName}
                       onChange={(e) => handleInputChange('hospitalName', e.target.value)}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                       placeholder="Medical Center Name"
                     />
                   </div>
@@ -291,7 +291,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
                       type="text"
                       value={formData.doctorId}
                       onChange={(e) => handleInputChange('doctorId', e.target.value)}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                       placeholder="MD12345"
                     />
                   </div>
@@ -315,7 +315,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
               </button>
               <button
                 onClick={handleStep2Continue}
-                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition"
+                className="flex-1 rounded-lg bg-brand-600 px-4 py-3 font-medium text-white transition hover:bg-brand-700"
               >
                 Continue
               </button>
@@ -328,9 +328,9 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
 
   // Step 3: Credentials
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-blue-100">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-xl">
           <div className="mb-8">
             <button
               onClick={() => setStep(2)}
@@ -354,7 +354,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
                   type={showPassword ? 'text' : 'password'}
                   value={credentials.password}
                   onChange={handlePasswordChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition pr-12"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 pr-12 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   placeholder="Enter a strong password"
                 />
                 <button
@@ -371,7 +371,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
 
               {/* Password Requirements */}
               {credentials.password && passwordValidation && (
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-medium text-gray-700 mb-2">Password Requirements:</p>
                   <div className="space-y-1.5">
                     {[
@@ -405,7 +405,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={credentials.confirmPassword}
                   onChange={(e) => setCredentials({ ...credentials, confirmPassword: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition pr-12"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 pr-12 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   placeholder="Confirm your password"
                 />
                 <button
@@ -449,7 +449,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
             <button
               onClick={handleSubmit}
               disabled={isSubmitting || !credentials.password || !credentials.confirmPassword}
-              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-medium transition"
+              className="flex-1 rounded-lg bg-brand-600 px-4 py-3 font-medium text-white transition hover:bg-brand-700 disabled:bg-slate-400"
             >
               {isSubmitting ? 'Creating Account...' : 'Create Account'}
             </button>
@@ -457,7 +457,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
 
           <p className="text-center text-sm text-gray-600 mt-6">
             Already have an account?{' '}
-            <button onClick={onSwitchToLogin} className="text-blue-600 hover:text-blue-700 font-medium">
+            <button onClick={onSwitchToLogin} className="font-medium text-brand-700 hover:text-brand-800">
               Sign in
             </button>
           </p>

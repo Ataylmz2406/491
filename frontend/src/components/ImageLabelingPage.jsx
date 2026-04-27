@@ -443,8 +443,8 @@ export default function ImageLabelingPage({ language = 'en' }) {
                 </div>
               ) : stats ? (
                 <div className="space-y-4">
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="text-2xl font-bold text-blue-600">{stats.total_images}</p>
+                  <div className="rounded-lg bg-slate-50 p-4">
+                    <p className="text-2xl font-bold text-brand-700">{stats.total_images}</p>
                     <p className="text-sm text-gray-600">{t.totalImages}</p>
                   </div>
 

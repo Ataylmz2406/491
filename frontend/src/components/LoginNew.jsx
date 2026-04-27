@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { authLogin } from '../services/authService';
 
-export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuestAccess }) {
+export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuestAccess, authMessage = '' }) {
   const [userType, setUserType] = useState('doctor'); // 'doctor' | 'researcher' | 'personal'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,16 +49,10 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
     }
   };
 
-  const handleDemoLogin = async () => {
-    // For demonstration - you can remove this in production
-    setEmail('demo@example.com');
-    setPassword('Demo123');
-  };
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-blue-100">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-xl">
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-slate-800 mb-2">Welcome Back</h1>
@@ -66,6 +60,13 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
           </div>
 
           {/* User Type Selection */}
+          {authMessage && (
+            <div className="mb-6 flex items-start gap-3 rounded-lg border border-brand-200 bg-brand-50 p-4">
+              <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-brand-700" />
+              <p className="text-sm text-brand-800">{authMessage}</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-2 mb-8">
             {[
               { value: 'doctor', label: '👨‍⚕️ Doctor' },
@@ -77,8 +78,8 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
                 onClick={() => setUserType(type.value)}
                 className={`py-2 rounded-lg text-sm font-medium transition-all ${
                   userType === type.value
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-brand-600 text-white shadow-md'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 {type.label}
@@ -98,7 +99,7 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                 placeholder="you@example.com"
                 autoComplete="email"
               />
@@ -117,7 +118,7 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition pr-12"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 pr-12 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   placeholder="Enter your password"
                   autoComplete="current-password"
                 />
@@ -138,7 +139,7 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus:ring-brand-500"
               />
               <label htmlFor="remember" className="ml-2 text-sm text-gray-700 cursor-pointer">
                 Remember me
@@ -157,7 +158,7 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-medium transition shadow-sm"
+              className="w-full rounded-lg bg-brand-600 py-3 font-medium text-white shadow-sm transition hover:bg-brand-700 disabled:bg-slate-400"
             >
               {isSubmitting ? (
                 <span className="flex items-center justify-center gap-2">
@@ -183,7 +184,7 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
           {/* Guest Access */}
           <button
             onClick={onGuestAccess}
-            className="w-full py-3 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-medium transition"
+            className="w-full rounded-lg border border-slate-300 py-3 font-medium text-slate-700 transition hover:bg-slate-50"
           >
             Continue as Guest
           </button>
@@ -192,7 +193,7 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
           <div className="mt-8 space-y-4 text-center">
             <p className="text-sm text-gray-600">
               Don't have an account?{' '}
-              <button onClick={onSwitchToRegister} className="text-blue-600 hover:text-blue-700 font-medium">
+              <button onClick={onSwitchToRegister} className="font-medium text-brand-700 hover:text-brand-800">
                 Create one
               </button>
             </p>
@@ -213,8 +214,8 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
         </div>
 
         {/* Additional Info */}
-        <div className="mt-6 bg-blue-50 rounded-lg p-4 border border-blue-200">
-          <p className="text-xs text-blue-800 text-center">
+        <div className="mt-6 rounded-lg border border-slate-200 bg-white p-4">
+          <p className="text-center text-xs text-slate-600">
             <strong>First time?</strong> Register for a new account to access all features and store your diagnostic history securely.
           </p>
         </div>

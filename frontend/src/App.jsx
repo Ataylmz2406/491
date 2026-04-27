@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, AlertCircle, CheckCircle, LogOut, User } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle, LogOut, Menu, User, X } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import ImageUploader from './components/ImageUploader';
 import DiagnosisResult from './components/DiagnosisResult';
@@ -7,7 +7,6 @@ import PatientHistory from './components/PatientHistory';
 import SecondOpinion from './components/SecondOpinion';
 import SecondOpinionFeed from './components/SecondOpinionFeed';
 import ImageLabelingPage from './components/ImageLabelingPage';
-import Login from './components/Login';
 import LoginNew from './components/LoginNew';
 import Register from './components/Register';
 import PatientLookup from './components/PatientLookup';
@@ -15,9 +14,35 @@ import CaseNotes from './components/CaseNotes';
 import Tutorial from './components/Tutorial';
 import MyAccount from './components/MyAccount';
 import { CaseProvider, useCaseContext } from './context/CaseContext';
-import { clearAccessToken, setAccessToken, getAccessToken } from './services/authService';
+import { authLogout, authRefresh, clearAccessToken, setAccessToken, getAccessToken } from './services/authService';
+import { friendlyApiMessage } from './services/apiErrorService';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const MAX_DERMOSCOPIC_IMAGES = 4;
+const MAX_ANALYSIS_IMAGE_BYTES = 8 * 1024 * 1024;
+const SUPPORTED_ANALYSIS_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const SUPPORTED_MOBILE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
+const SUPPORTED_ANALYSIS_UPLOAD_TYPES = new Set([...SUPPORTED_ANALYSIS_IMAGE_TYPES, ...SUPPORTED_MOBILE_IMAGE_TYPES]);
+const SUPPORTED_ANALYSIS_IMAGE_LABEL = 'JPG, PNG, WebP, HEIC, or HEIF';
+const PROTECTED_DOCTOR_TABS = new Set(['ask', 'feed', 'help']);
+
+const getTutorialSeenKey = (type) => `suderm_tutorial_seen_${type || 'guest'}`;
+
+const hasSeenTutorialThisSession = (type) =>
+  typeof window !== 'undefined' &&
+  window.localStorage.getItem(getTutorialSeenKey(type)) === 'true';
+
+const markTutorialSeenThisSession = (type) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(getTutorialSeenKey(type), 'true');
+};
+
+const stripAuthTokens = (data = {}) => {
+  const profileData = { ...data };
+  delete profileData.access_token;
+  delete profileData.token_type;
+  return profileData;
+};
 
 // Location mapping for display names
 const LOCATION_MAP = {
@@ -30,7 +55,7 @@ const LOCATION_MAP = {
 
 function App() {
   // Get case context
-  const { state: caseState, dispatch: caseDispatch, resetCurrentCase } = useCaseContext();
+  const { state: caseState, resetCurrentCase } = useCaseContext();
 
   // --- Landing / Navigation State ---
   const [showLanding, setShowLanding] = useState(true);
@@ -70,13 +95,15 @@ function App() {
   const [secondOpinionSubTab, setSecondOpinionSubTab] = useState('ask'); // 'ask' or 'feed'
   const [selectedTab, setSelectedTab] = useState('analysis'); // 'analysis', 'ask', 'feed'
   const [pendingTab, setPendingTab] = useState(null); // Tab to redirect after login/guest checkout
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [authMessage, setAuthMessage] = useState('');
 
   // --- Toast ---
   const [toast, setToast] = useState(null);
-  const showToast = (msg) => {
+  const showToast = React.useCallback((msg) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
-  };
+  }, []);
 
   // doctor profile info pulled from login
   const [doctorProfile, setDoctorProfile] = useState({ name: '', info: '' });
@@ -113,12 +140,29 @@ function App() {
       labelAsk: 'Ask other doctors',
       labelFeed: 'Help other doctors',
       labelResearch: 'Help Researchers',
+      researchSubtitle: 'Help build training datasets for skin lesion classification',
       language: 'Language',
       english: 'English',
       turkish: 'Türkçe',
       myAccount: 'My Account',
       signOut: 'Sign Out',
-      myAnalyses: 'My Analyses'
+      myAnalyses: 'My Analyses',
+      hospital: 'Hospital',
+      doctorId: 'ID',
+      researcher: 'Researcher',
+      user: 'User',
+      openFilters: 'Open case details',
+      patientId: 'Patient ID',
+      patientIdPlaceholder: 'Enter Patient ID (e.g., P001, PAT-2026-001)',
+      patientIdHelper: 'Used for tracking patient history and case organization',
+      includeClinicalImage: 'Include clinical image',
+      onlySupportedImages: `Only ${SUPPORTED_ANALYSIS_IMAGE_LABEL} images are supported.`,
+      maxImageSize: 'Each image must be 8 MB or smaller.',
+      maxDermoscopicImages: `You can upload up to ${MAX_DERMOSCOPIC_IMAGES} dermoscopic images.`,
+      dermoscopicRequired: 'At least one dermoscopic image is required for analysis.',
+      patientIdRequired: 'Patient ID is required before running diagnostics.',
+      caseSaved: 'Case saved successfully!',
+      loginRequiredFeature: 'Please log in as a doctor to access this feature.'
     },
     tr: {
       landingSubtitle: 'Profesyonel Yapay Zeka Cilt Teşhisi',
@@ -148,12 +192,29 @@ function App() {
       labelAsk: 'Diğer doktorlara sor',
       labelFeed: 'Diğer doktorlara yardımcı ol',
       labelResearch: 'Araştırmacılara Yardımcı Ol',
+      researchSubtitle: 'Cilt lezyonu sınıflandırması için eğitim veri setleri oluşturmaya yardım edin',
       language: 'Dil',
       english: 'English',
       turkish: 'Türkçe',
       myAccount: 'Hesabım',
       signOut: 'Çıkış Yap',
-      myAnalyses: 'Analizlerim'
+      myAnalyses: 'Analizlerim',
+      hospital: 'Hastane',
+      doctorId: 'ID',
+      researcher: 'Araştırmacı',
+      user: 'Kullanıcı',
+      openFilters: 'Vaka detaylarını aç',
+      patientId: 'Hasta ID',
+      patientIdPlaceholder: 'Hasta ID girin (örn. P001, PAT-2026-001)',
+      patientIdHelper: 'Hasta geçmişini ve vaka düzenini takip etmek için kullanılır',
+      includeClinicalImage: 'Klinik görüntü ekle',
+      onlySupportedImages: `Yalnızca ${SUPPORTED_ANALYSIS_IMAGE_LABEL} görüntüleri desteklenir.`,
+      maxImageSize: 'Her görüntü 8 MB veya daha küçük olmalıdır.',
+      maxDermoscopicImages: `En fazla ${MAX_DERMOSCOPIC_IMAGES} dermatoskopik görüntü yükleyebilirsiniz.`,
+      dermoscopicRequired: 'Analiz için en az bir dermatoskopik görüntü gereklidir.',
+      patientIdRequired: 'Teşhisi çalıştırmadan önce Hasta ID gereklidir.',
+      caseSaved: 'Vaka başarılı şekilde kaydedildi!',
+      loginRequiredFeature: 'Bu özelliğe erişmek için doktor olarak giriş yapın.'
     }
   };
 
@@ -161,25 +222,48 @@ function App() {
 
   // --- Check for persisted login on mount ---
   useEffect(() => {
-    const token = getAccessToken();
-    const storedUserType = localStorage.getItem('suderm_user_type');
-    const storedLoginData = localStorage.getItem('suderm_login_data');
+    let cancelled = false;
 
-    if (token && storedUserType && storedLoginData) {
+    const restoreSession = async () => {
+      const token = getAccessToken();
+      const storedUserType = localStorage.getItem('suderm_user_type');
+      const storedLoginData = localStorage.getItem('suderm_login_data');
+
+      if (!storedUserType || !storedLoginData) return;
+
       try {
         const parsedData = JSON.parse(storedLoginData);
-        setUserType(storedUserType);
-        setLoginData(parsedData);
+        let profileData = parsedData;
+        let effectiveUserType = storedUserType;
+
+        if (!token) {
+          const refreshed = await authRefresh();
+          profileData = { ...parsedData, ...stripAuthTokens(refreshed) };
+          effectiveUserType = refreshed.user_type || storedUserType;
+        }
+
+        if (cancelled) return;
+        setUserType(effectiveUserType);
+        setLoginData(profileData);
         setLoggedIn(true);
         setShowLanding(false);
-        setShowTutorial(true); // Show tutorial or go directly to app based on your preference
+        setShowTutorial(!hasSeenTutorialThisSession(effectiveUserType));
+        localStorage.setItem('suderm_user_type', effectiveUserType);
+        localStorage.setItem('suderm_login_data', JSON.stringify(profileData));
       } catch (e) {
-        console.error('Failed to restore login state:', e);
-        clearAccessToken();
-        localStorage.removeItem('suderm_user_type');
-        localStorage.removeItem('suderm_login_data');
+        if (!cancelled) {
+          console.error('Failed to restore login state:', e);
+          clearAccessToken();
+          localStorage.removeItem('suderm_user_type');
+          localStorage.removeItem('suderm_login_data');
+        }
       }
-    }
+    };
+
+    void restoreSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   React.useEffect(() => {
@@ -199,7 +283,7 @@ function App() {
   React.useEffect(() => {
     if (userType === 'doctor' && loggedIn) {
       setDoctorProfile({
-        name: loginData?.doctorName || loginData?.doctorId || '',
+        name: loginData?.full_name || loginData?.doctorName || loginData?.doctor_id || loginData?.doctorId || '',
         info: loginData?.hospital || '',
       });
     } else if (userType === 'doctor' && !loggedIn) {
@@ -233,7 +317,14 @@ function App() {
       // Show toast indicating case loaded
       showToast('Case loaded successfully!');
     }
-  }, [caseState.currentCase.id]);
+  }, [
+    caseState.currentCase.aiPrediction,
+    caseState.currentCase.confidence,
+    caseState.currentCase.id,
+    caseState.currentCase.lesionLocation,
+    caseState.currentCase.patientId,
+    showToast,
+  ]);
 
   // --- Handlers ---
   const handleUserTypeChoice = (type) => {
@@ -255,34 +346,49 @@ function App() {
   };
 
   const handleGuestAccess = () => {
+    if (pendingTab && PROTECTED_DOCTOR_TABS.has(pendingTab)) {
+      setSelectedTab('analysis');
+      setPendingTab(null);
+      setAuthMessage(t.loginRequiredFeature);
+      setShowLogin(true);
+      setShowRegister(false);
+      return;
+    }
+
     setLoggedIn(false);
     clearAccessToken();
-    // pendingTab is preserved — applied after tutorial in handleTutorialContinue/Skip
+    setPendingTab(null);
+    setSelectedTab('analysis');
     setShowLogin(false);
     setShowRegister(false);
-    setShowTutorial(true);
+    setShowTutorial(!hasSeenTutorialThisSession(userType));
   };
 
   const handleLoginSuccess = (data) => {
     if (data?.access_token) {
       setAccessToken(data.access_token);
     }
-    setLoginData(data);
+    if (data?.user_type) {
+      setUserType(data.user_type);
+    }
+    const profileData = stripAuthTokens(data);
+    setLoginData(profileData);
     setLoggedIn(true);
+    setAuthMessage('');
     // Persist login data to localStorage
-    localStorage.setItem('suderm_user_type', userType);
-    localStorage.setItem('suderm_login_data', JSON.stringify(data));
+    localStorage.setItem('suderm_user_type', data?.user_type || userType);
+    localStorage.setItem('suderm_login_data', JSON.stringify(profileData));
     if (pendingTab) {
       setSelectedTab(pendingTab);
       setPendingTab(null);
     }
     setShowLogin(false);
     setShowRegister(false);
-    setShowTutorial(true);
+    setShowTutorial(!hasSeenTutorialThisSession(data?.user_type || userType));
   };
 
   const handleLogout = () => {
-    clearAccessToken();
+    void authLogout();
     localStorage.removeItem('suderm_user_type');
     localStorage.removeItem('suderm_login_data');
     setLoggedIn(false);
@@ -291,10 +397,16 @@ function App() {
     setShowLanding(true);
     setShowMyAccount(false);
     setShowTutorial(false);
+    setPendingTab(null);
+    setSelectedTab('analysis');
+    setActiveTab('analysis');
+    setSecondOpinionSubTab('ask');
+    setAuthMessage('');
     showToast('You have been signed out');
   };
 
   const handleTutorialContinue = () => {
+    markTutorialSeenThisSession(userType);
     setShowTutorial(false);
     if (pendingTab) {
       setSelectedTab(pendingTab);
@@ -303,6 +415,7 @@ function App() {
   };
 
   const handleTutorialSkip = () => {
+    markTutorialSeenThisSession(userType);
     setShowTutorial(false);
     if (pendingTab) {
       setSelectedTab(pendingTab);
@@ -318,45 +431,195 @@ function App() {
     setShowLanding(true);
     setShowLogin(false);
     setShowRegister(false);
+    setPendingTab(null);
+    setSelectedTab('analysis');
+    setAuthMessage('');
   };
 
-  const handleLoginBack = () => {
-    clearAccessToken();
-    setPendingTab(null); // Cancel any pending redirect if user abandons login
-    setUserType(null);
-    setShowLanding(true);
-    setShowLogin(false);
-  };
-  const handleFileChange = (e, type) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const previewUrl = URL.createObjectURL(file);
-    if (type === 'dermoscopic') {
-      // Add to array if less than 4 files
-      if (dermFiles.length < 4) {
-        setDermFiles([...dermFiles, file]);
-        setDermPreviews([...dermPreviews, previewUrl]);
-      }
-    } else {
-      setClinFile(file);
-      setClinPreview(previewUrl);
+  const requireDoctorLoginForTab = (tabName) => {
+    if (!loggedIn) {
+      setPendingTab(tabName);
+      setSelectedTab('analysis');
+      setAuthMessage(t.loginRequiredFeature);
+      setShowLogin(true);
+      return false;
     }
+    setAuthMessage('');
+    return true;
+  };
+
+  const isMobileHeicImage = (file) =>
+    SUPPORTED_MOBILE_IMAGE_TYPES.has(file.type) || /\.(heic|heif)$/i.test(file.name || '');
+
+  const transformImageFile = (file, transform) =>
+    new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const sourceWidth = img.naturalWidth || img.width;
+        const sourceHeight = img.naturalHeight || img.height;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          reject(new Error('Image editing is not available in this browser.'));
+          return;
+        }
+
+        if (transform === 'crop-square') {
+          const side = Math.min(sourceWidth, sourceHeight);
+          canvas.width = side;
+          canvas.height = side;
+          ctx.drawImage(
+            img,
+            Math.floor((sourceWidth - side) / 2),
+            Math.floor((sourceHeight - side) / 2),
+            side,
+            side,
+            0,
+            0,
+            side,
+            side
+          );
+        } else if (transform === 'normalize-jpeg') {
+          canvas.width = sourceWidth;
+          canvas.height = sourceHeight;
+          ctx.drawImage(img, 0, 0, sourceWidth, sourceHeight);
+        } else {
+          canvas.width = sourceHeight;
+          canvas.height = sourceWidth;
+          ctx.translate(canvas.width / 2, canvas.height / 2);
+          ctx.rotate(Math.PI / 2);
+          ctx.drawImage(img, -sourceWidth / 2, -sourceHeight / 2);
+        }
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Image editing failed. Please try another image.'));
+              return;
+            }
+            const suffix = transform === 'normalize-jpeg' ? 'converted' : transform;
+            const editedName = file.name.replace(/\.[^.]+$/, `-${suffix}.jpg`);
+            resolve(new File([blob], editedName, { type: 'image/jpeg' }));
+          },
+          'image/jpeg',
+          0.92
+        );
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Image could not be edited. Please try another image.'));
+      };
+
+      img.src = objectUrl;
+    });
+
+  const validateImageFiles = async (files, availableSlots) => {
+    const accepted = [];
+    const messages = [];
+
+    for (const file of files) {
+      const isSupportedType = SUPPORTED_ANALYSIS_UPLOAD_TYPES.has(file.type) || isMobileHeicImage(file);
+      if (!isSupportedType) {
+        messages.push(t.onlySupportedImages);
+        continue;
+      }
+
+      if (file.size > MAX_ANALYSIS_IMAGE_BYTES) {
+        messages.push(t.maxImageSize);
+        continue;
+      }
+
+      if (isMobileHeicImage(file)) {
+        try {
+          accepted.push(await transformImageFile(file, 'normalize-jpeg'));
+        } catch {
+          messages.push('HEIC/HEIF could not be converted in this browser. Please export it as JPG and try again.');
+        }
+      } else {
+        accepted.push(file);
+      }
+    }
+
+    if (accepted.length > availableSlots) {
+      messages.push(t.maxDermoscopicImages);
+    }
+
+    return {
+      files: accepted.slice(0, availableSlots),
+      message: [...new Set(messages)].join(' '),
+    };
+  };
+
+  const handleFileChange = async (e, type) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    if (type === 'dermoscopic') {
+      const availableSlots = Math.max(0, MAX_DERMOSCOPIC_IMAGES - dermFiles.length);
+      const validation = await validateImageFiles(selectedFiles, availableSlots);
+
+      if (validation.files.length > 0) {
+        setDermFiles((prev) => [...prev, ...validation.files]);
+        setDermPreviews((prev) => [
+          ...prev,
+          ...validation.files.map((file) => URL.createObjectURL(file)),
+        ]);
+      }
+
+      setError(validation.message || null);
+    } else {
+      const validation = await validateImageFiles(selectedFiles.slice(0, 1), 1);
+      if (validation.files.length > 0) {
+        if (clinPreview) URL.revokeObjectURL(clinPreview);
+        setClinFile(validation.files[0]);
+        setClinPreview(URL.createObjectURL(validation.files[0]));
+      }
+      setError(validation.message || null);
+    }
+
+    e.target.value = '';
     setResult(null);
+  };
+
+  const editDermoscopicImage = async (index, transform) => {
+    const file = dermFiles[index];
+    if (!file) return;
+
+    try {
+      const editedFile = await transformImageFile(file, transform);
+      const editedPreview = URL.createObjectURL(editedFile);
+      URL.revokeObjectURL(dermPreviews[index]);
+
+      setDermFiles((prev) => prev.map((item, itemIndex) => (itemIndex === index ? editedFile : item)));
+      setDermPreviews((prev) => prev.map((item, itemIndex) => (itemIndex === index ? editedPreview : item)));
+      setResult(null);
+      setError(null);
+    } catch (err) {
+      setError(err.message || 'Image could not be edited. Please try again.');
+    }
   };
 
   const clearFile = (type, index = null) => {
     if (type === 'dermoscopic') {
       if (index !== null) {
+        URL.revokeObjectURL(dermPreviews[index]);
         // Remove specific image by index
         setDermFiles(dermFiles.filter((_, i) => i !== index));
         setDermPreviews(dermPreviews.filter((_, i) => i !== index));
       } else {
         // Clear all dermoscopic images and reset case
+        dermPreviews.forEach((preview) => URL.revokeObjectURL(preview));
         setDermFiles([]);
         setDermPreviews([]);
         resetCurrentCase();
       }
     } else {
+      if (clinPreview) URL.revokeObjectURL(clinPreview);
       setClinFile(null);
       setClinPreview(null);
     }
@@ -365,7 +628,12 @@ function App() {
 
   const handleSubmit = async () => {
     if (dermFiles.length === 0) {
-      setError("At least one dermoscopic image is required for analysis.");
+      setError(t.dermoscopicRequired);
+      return;
+    }
+
+    if (userType === 'doctor' && !patientId.trim()) {
+      setError(t.patientIdRequired);
       return;
     }
 
@@ -401,7 +669,9 @@ function App() {
         try {
           const errData = await response.json();
           errorMsg = errData.detail || errorMsg;
-        } catch (e) { }
+        } catch {
+          // Keep the default message when the response body is not JSON.
+        }
         throw new Error(errorMsg);
       }
 
@@ -409,7 +679,8 @@ function App() {
       setResult(data);
 
       // Auto-save diagnosis for doctors
-      if (userType === 'doctor' && loggedIn && loginData?.access_token) {
+      const accessToken = getAccessToken();
+      if (userType === 'doctor' && loggedIn && accessToken) {
         try {
           // Extract confidence_score - it comes as decimal from backend (0-1)
           const confidence = data.confidence_score || 
@@ -417,8 +688,9 @@ function App() {
           
           const saveResponse = await fetch(`${API_BASE_URL}/doctor/save-analysis`, {
             method: 'POST',
+            credentials: 'include',
             headers: {
-              'Authorization': `Bearer ${loginData.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
               'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: new URLSearchParams({
@@ -443,7 +715,7 @@ function App() {
         }
       }
     } catch (err) {
-      setError(err.message || "An unexpected error occurred.");
+      setError(friendlyApiMessage(err.message, 'Analysis could not be completed. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -451,6 +723,8 @@ function App() {
 
   const handleNewSession = () => {
     // Clear results and images to start fresh
+    dermPreviews.forEach((preview) => URL.revokeObjectURL(preview));
+    if (clinPreview) URL.revokeObjectURL(clinPreview);
     setResult(null);
     setLoading(false);
     setError(null);
@@ -465,11 +739,14 @@ function App() {
   // watch dermFiles to clear checkbox/clinical when removed
   React.useEffect(() => {
     if (dermFiles.length === 0) {
-      // hide checkbox and drop any clinical image
       setShowClinCheckbox(false);
-      clearFile('clinical');
+      if (clinPreview) {
+        URL.revokeObjectURL(clinPreview);
+        setClinFile(null);
+        setClinPreview(null);
+      }
     }
-  }, [dermFiles]);
+  }, [dermFiles.length, clinPreview]);
 
   const handleOpenHistory = (metadata = null) => {
     setModalQuestionMetadata(metadata);
@@ -520,6 +797,7 @@ function App() {
         onSwitchToRegister={handleSwitchToRegister}
         onCancel={handleAuthCancel}
         onGuestAccess={handleGuestAccess}
+        authMessage={authMessage}
       />
     );
   }
@@ -558,33 +836,75 @@ function App() {
     );
   }
 
+  const shouldShowSidebar = !(activeTab === 'secondOpinion' && secondOpinionSubTab === 'feed') && activeTab !== 'help';
+  const sidebarProps = {
+    language,
+    location,
+    setLocation,
+    diagnosis,
+    setDiagnosis,
+    imageNotApplicable,
+    setImageNotApplicable,
+    showGroundTruth: userType !== 'personal',
+    ageGroup,
+    setAgeGroup,
+    sex,
+    setSex,
+    skinTone,
+    setSkinTone,
+    onLogoClick: () => {
+      setSelectedTab('analysis');
+      setMobileSidebarOpen(false);
+    },
+  };
   return (
     <div className="flex h-screen overflow-hidden font-sans text-gray-800 bg-gray-50">
-      {!(activeTab === 'secondOpinion' && secondOpinionSubTab === 'feed') && activeTab !== 'help' && (
-        <Sidebar
-          language={language}
-          location={location}
-          setLocation={setLocation}
-          diagnosis={diagnosis}
-          setDiagnosis={setDiagnosis}
-          imageNotApplicable={imageNotApplicable}
-          setImageNotApplicable={setImageNotApplicable}
-          showGroundTruth={userType !== 'personal'}
-          ageGroup={ageGroup}
-          setAgeGroup={setAgeGroup}
-          sex={sex}
-          setSex={setSex}
-          skinTone={skinTone}
-          setSkinTone={setSkinTone}
-          onLogoClick={() => setActiveTab('analysis')}
-        />
+      {shouldShowSidebar && (
+        <>
+          <div className="hidden h-full shrink-0 lg:block">
+            <Sidebar {...sidebarProps} />
+          </div>
+
+          {mobileSidebarOpen && (
+            <div className="fixed inset-0 z-40 lg:hidden">
+              <button
+                type="button"
+                aria-label="Close case details"
+                className="absolute inset-0 bg-slate-950/60"
+                onClick={() => setMobileSidebarOpen(false)}
+              />
+              <div className="relative h-full w-[min(22rem,88vw)] shadow-2xl">
+                <button
+                  type="button"
+                  aria-label="Close case details"
+                  onClick={() => setMobileSidebarOpen(false)}
+                  className="absolute right-3 top-3 z-10 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                <Sidebar {...sidebarProps} />
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* --- Main Content Area --- */}
-      <main className={`${activeTab === 'secondOpinion' && secondOpinionSubTab === 'feed' ? 'flex-1' : 'flex-1'} flex flex-col overflow-hidden`}>
-        <header className="px-8 py-6 bg-white border-b border-gray-200">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="border-b border-slate-200 bg-white px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              {shouldShowSidebar && (
+                <button
+                  type="button"
+                  aria-label={t.openFilters}
+                  onClick={() => setMobileSidebarOpen(true)}
+                  className="mt-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm lg:hidden"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+              )}
+              <div>
               {activeTab === 'analysis' ? (
                 <div className="flex items-center mb-1 mt-1">
                    <img src="/logo%20only.png" alt="SUDerm Header Logo" className="h-[4.5rem] w-auto object-contain" />
@@ -592,7 +912,7 @@ function App() {
               ) : activeTab === 'help' ? (
                 <>
                   <h2 className="text-2xl font-semibold text-gray-800">{t.labelResearch}</h2>
-                  <p className="text-sm text-gray-500">Help build training datasets for skin lesion classification</p>
+                  <p className="text-sm text-gray-500">{t.researchSubtitle}</p>
                 </>
               ) : (
                 <>
@@ -610,24 +930,25 @@ function App() {
                 <div className="text-xs text-gray-600 mt-1 max-w-xs pointer-events-none">
                   {userType === 'doctor' && (
                     <>
-                      <div>Hospital: {loginData.hospital || 'N/A'}</div>
-                      <div>ID: {loginData.doctor_id || loginData.doctorId || 'N/A'}</div>
+                      <div>{t.hospital}: {loginData.hospital || 'N/A'}</div>
+                      <div>{t.doctorId}: {loginData.doctor_id || loginData.doctorId || 'N/A'}</div>
                     </>
                   )}
-                  {userType === 'researcher' && <span>Researcher: {loginData.email}</span>}
-                  {userType === 'personal' && <span>User: {loginData.email}</span>}
+                  {userType === 'researcher' && <span>{t.researcher}: {loginData.email}</span>}
+                  {userType === 'personal' && <span>{t.user}: {loginData.email}</span>}
                 </div>
               )}
+              </div>
             </div>
 
             {/* User mode indicator + switcher + Patient History + PatientLookup */}
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
                 <span>{t.language}:</span>
                 <select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}
-                  className="text-sm font-medium text-gray-800 bg-white border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
                   <option value="en">{t.english}</option>
                   <option value="tr">{t.turkish}</option>
@@ -638,54 +959,35 @@ function App() {
               )}
               {/* tab switcher for doctors */}
               {userType === 'doctor' && (
-                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <div className="flex max-w-full flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1">
                   <button
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'analysis' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${selectedTab === 'analysis' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     onClick={() => {
-                      if (!loggedIn) {
-                        setShowLogin(true);
-                        return;
-                      }
                       setSelectedTab('analysis');
                     }}
                   >
                     {t.labelAnalysis}
                   </button>
                   <button
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'ask' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${selectedTab === 'ask' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     onClick={() => {
-                      if (!loggedIn) {
-                        setPendingTab('ask');
-                        setShowLogin(true);
-                        return;
-                      }
-                      setSelectedTab('ask');
+                      if (requireDoctorLoginForTab('ask')) setSelectedTab('ask');
                     }}
                   >
                     {t.labelAsk}
                   </button>
                   <button
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'feed' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${selectedTab === 'feed' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     onClick={() => {
-                      if (!loggedIn) {
-                        setPendingTab('feed');
-                        setShowLogin(true);
-                        return;
-                      }
-                      setSelectedTab('feed');
+                      if (requireDoctorLoginForTab('feed')) setSelectedTab('feed');
                     }}
                   >
                     {t.labelFeed}
                   </button>
                   <button
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedTab === 'help' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${selectedTab === 'help' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     onClick={() => {
-                      if (!loggedIn) {
-                        setPendingTab('help');
-                        setShowLogin(true);
-                        return;
-                      }
-                      setSelectedTab('help');
+                      if (requireDoctorLoginForTab('help')) setSelectedTab('help');
                     }}
                   >
                     {t.labelResearch}
@@ -696,7 +998,7 @@ function App() {
               {activeTab === 'analysis' && result && (
                 <button
                   onClick={handleNewSession}
-                  className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
                   {t.newConsultation}
                 </button>
@@ -709,9 +1011,14 @@ function App() {
                   // require re-login when switching modes
                   clearAccessToken();
                   setLoggedIn(false);
+                  setPendingTab(null);
+                  setSelectedTab('analysis');
+                  setActiveTab('analysis');
+                  setSecondOpinionSubTab('ask');
+                  setAuthMessage('');
                   setShowLogin(true);
                 }}
-                className="text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-shadow transition-colors"
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
                 aria-label="Switch user mode"
               >
                 <option value="doctor">{t.forDoctors}</option>
@@ -722,26 +1029,26 @@ function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pb-28 lg:pb-6">
           {activeTab === 'analysis' ? (
             <div className="max-w-6xl mx-auto">
-              <div className="p-8">
-                <div className="flex flex-row gap-8 items-start">
+              <div className="p-4 sm:p-6">
+                <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
                   {/* Left side: Uploads and button - hide after result */}
                   {!result && (
-                    <div className="flex flex-col w-full max-w-md gap-4">
+                    <div className="flex w-full max-w-md flex-col gap-4">
                       {/* Patient ID Input (Doctor Mode) */}
                       {userType === 'doctor' && (
-                        <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
-                          <label className="block text-sm font-bold text-gray-700 mb-2">Patient ID <span className="text-red-500">*</span></label>
+                        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                          <label className="mb-2 block text-sm font-bold text-slate-700">{t.patientId} <span className="text-red-500">*</span></label>
                           <input
                             type="text"
                             value={patientId}
                             onChange={(e) => setPatientId(e.target.value)}
-                            placeholder="Enter Patient ID (e.g., P001, PAT-2026-001)"
-                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder={t.patientIdPlaceholder}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500"
                           />
-                          <p className="text-xs text-gray-500 mt-2">Used for tracking patient history and case organization</p>
+                          <p className="mt-2 text-xs text-slate-500">{t.patientIdHelper}</p>
                         </div>
                       )}
                       <ImageUploader
@@ -753,6 +1060,7 @@ function App() {
                         clinPreview={clinPreview}
                         handleFileChange={handleFileChange}
                         clearFile={clearFile}
+                        editDermoscopicImage={editDermoscopicImage}
                         showClinical={showClinCheckbox && userType !== 'personal'}
                       />
                       {/* checkbox only visible after a dermoscopic file is selected and not in personal mode */}
@@ -770,12 +1078,12 @@ function App() {
                             }}
                             className="form-checkbox h-5 w-5 text-brand-600 focus:ring-2 focus:ring-brand-500"
                           />
-                          <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Include clinical image</span>
+                          <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">{t.includeClinicalImage}</span>
                         </label>
                       )}
                       {/* Submit Bar below uploads */}
-                      <div className="flex flex-col gap-2 pt-4">
-                        <div className="text-xs text-gray-400">
+                      <div className="flex flex-col gap-2 pt-2">
+                        <div className="text-xs text-slate-500">
                           <p>{t.checkImages}</p>
                         </div>
                         {userType === 'personal' && (
@@ -786,7 +1094,7 @@ function App() {
                         <button
                           onClick={handleSubmit}
                           disabled={loading || dermFiles.length === 0}
-                          className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-white shadow-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2
+                          className={`flex items-center justify-center gap-2 rounded-lg px-6 py-3.5 font-semibold text-white shadow-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2
                                   ${loading || dermFiles.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700 hover:shadow-lg active:scale-[0.98] focus:ring-brand-500'}`}
                         >
                           {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
@@ -802,7 +1110,7 @@ function App() {
                     </div>
                   )}
                   {/* Right side: Diagnosis Result and Notes */}
-                  <div className={`${!result ? 'flex-1' : 'w-full'} flex ${result && userType === 'doctor' ? 'flex-row' : 'flex-col'} items-center justify-start gap-4`}>
+                  <div className={`${!result ? 'flex-1' : 'w-full'} flex ${result && userType === 'doctor' ? 'flex-col xl:flex-row' : 'flex-col'} items-center justify-start gap-4`}>
                     {/* Dermoscopic examples — hidden after results arrive */}
                     {(result || loading) && (
                       <div className={`${result && userType === 'doctor' ? 'flex-1' : 'w-full'}`}>
@@ -818,7 +1126,8 @@ function App() {
                           patientId={patientId}
                           location={location}
                           locationMap={LOCATION_MAP}
-                          onSave={() => showToast('Case saved successfully!')}
+                          onSave={() => showToast(t.caseSaved)}
+                          onDelete={handleNewSession}
                         />
                       </div>
                     )}
@@ -832,7 +1141,7 @@ function App() {
               onViewHistory={handleOpenHistory}
             />
           ) : (
-            <div className="max-w-6xl mx-auto p-8">
+            <div className="mx-auto max-w-6xl p-4 sm:p-6">
               {secondOpinionSubTab === 'ask' ? (
                 <SecondOpinion
                   language={language}
@@ -886,7 +1195,7 @@ function App() {
 
       {/* Doctor Action Buttons - Bottom Right */}
       {loggedIn && userType === 'doctor' && (
-        <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-40">
+        <div className="fixed bottom-4 right-4 z-40 flex flex-row gap-2 lg:bottom-6 lg:right-6 lg:flex-col">
           <button
             onClick={() => setShowMyAccount(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-md hover:shadow-lg"

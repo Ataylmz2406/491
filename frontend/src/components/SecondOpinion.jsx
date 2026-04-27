@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertCircle, History, Loader2, MessageSquareText, Send, Trash2, Upload } from 'lucide-react';
 import {
   SECOND_OPINION_DISEASE_OPTIONS,
@@ -7,10 +7,10 @@ import {
   createSecondOpinionPost,
   normalizeSecondOpinionPost,
 } from '../services/secondOpinionService';
+import { friendlyApiMessage } from '../services/apiErrorService';
 
 const DOCTOR_NAME_STORAGE_KEY = 'suderm_second_opinion_doctor_name';
 const DOCTOR_AFFILIATION_STORAGE_KEY = 'suderm_second_opinion_doctor_affiliation';
-const SECOND_OPINION_DRAFT_KEY = 'suderm_second_opinion_ask_draft';
 const CAPTION_MAX = 500;
 const SECOND_OPINION_MAX_IMAGES = 12;
 const MAX_IMAGE_DIMENSION = 1600;
@@ -42,6 +42,11 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       removeImage: 'Remove image',
       addImageFirst: 'Please add at least one image.',
       patientRequired: 'Patient ID is required before posting.',
+      hypothesisRequired: 'AI prediction is required before posting.',
+      missingPatient: 'Patient ID',
+      missingHypothesis: 'AI prediction',
+      missingImages: 'at least one image',
+      completeRequired: 'Complete required fields:',
       maxImages: `You can upload up to ${SECOND_OPINION_MAX_IMAGES} images.`,
       imageProcessError: 'One or more images could not be processed.',
     },
@@ -69,6 +74,11 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       removeImage: 'Görüntüyü kaldır',
       addImageFirst: 'Lütfen en az bir görüntü ekleyin.',
       patientRequired: 'Göndermeden önce hasta ID gerekli.',
+      hypothesisRequired: 'Göndermeden önce yapay zeka tahmini gerekli.',
+      missingPatient: 'Hasta ID',
+      missingHypothesis: 'Yapay zeka tahmini',
+      missingImages: 'en az bir görüntü',
+      completeRequired: 'Zorunlu alanları tamamlayın:',
       maxImages: `En fazla ${SECOND_OPINION_MAX_IMAGES} görüntü yükleyebilirsiniz.`,
       imageProcessError: 'Bir veya daha fazla görüntü işlenemedi.',
     },
@@ -89,45 +99,26 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
   const [isAnonymous, setIsAnonymous] = useState(false);
 
   useEffect(() => {
-    const savedDoctorName = window.localStorage.getItem(DOCTOR_NAME_STORAGE_KEY);
-    const savedDoctorAffiliation = window.localStorage.getItem(DOCTOR_AFFILIATION_STORAGE_KEY);
+    const profileName = (doctorProfile?.name || '').trim();
+    const profileAffiliation = (doctorProfile?.info || '').trim();
+    const savedDoctorName = (window.localStorage.getItem(DOCTOR_NAME_STORAGE_KEY) || '').trim();
+    const savedDoctorAffiliation = (window.localStorage.getItem(DOCTOR_AFFILIATION_STORAGE_KEY) || '').trim();
 
-    setDoctorName(savedDoctorName ?? doctorProfile?.name ?? '');
-    setDoctorAffiliation(savedDoctorAffiliation ?? doctorProfile?.info ?? '');
+    setDoctorName(profileName || savedDoctorName);
+    setDoctorAffiliation(profileAffiliation || savedDoctorAffiliation);
   }, [doctorProfile?.name, doctorProfile?.info]);
 
   useEffect(() => {
-    const savedDraft = window.localStorage.getItem(SECOND_OPINION_DRAFT_KEY);
-    if (!savedDraft) return;
-
-    try {
-      const parsed = JSON.parse(savedDraft);
-      setPatientId(parsed.patientId || '');
-      setCurrentHypothesis(parsed.currentHypothesis || '');
-      setDraft((prev) => ({ ...prev, caption: parsed.caption || '' }));
-    } catch {
-      // ignore malformed local draft
+    if (doctorName.trim()) {
+      window.localStorage.setItem(DOCTOR_NAME_STORAGE_KEY, doctorName.trim());
     }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(DOCTOR_NAME_STORAGE_KEY, doctorName);
   }, [doctorName]);
 
   useEffect(() => {
-    window.localStorage.setItem(DOCTOR_AFFILIATION_STORAGE_KEY, doctorAffiliation);
+    if (doctorAffiliation.trim()) {
+      window.localStorage.setItem(DOCTOR_AFFILIATION_STORAGE_KEY, doctorAffiliation.trim());
+    }
   }, [doctorAffiliation]);
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      SECOND_OPINION_DRAFT_KEY,
-      JSON.stringify({
-        patientId,
-        currentHypothesis,
-        caption: draft.caption,
-      })
-    );
-  }, [patientId, currentHypothesis, draft.caption]);
 
   useEffect(() => {
     return () => {
@@ -272,6 +263,11 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       return;
     }
 
+    if (!currentHypothesis.trim()) {
+      setError(t.hypothesisRequired);
+      return;
+    }
+
     setError('');
     setPosting(true);
 
@@ -292,7 +288,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       setPosts((prev) => [normalizedPost, ...prev]);
       resetDraft();
     } catch (err) {
-      setError(`${t.errorPrefix} ${err.message || 'Unknown error'}`);
+      setError(`${t.errorPrefix} ${friendlyApiMessage(err.message, 'Unknown error')}`);
     } finally {
       setPosting(false);
     }
@@ -335,7 +331,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       setCommentDrafts((prev) => ({ ...prev, [postId]: '' }));
       setCommentAnonymous((prev) => ({ ...prev, [postId]: false }));
     } catch (err) {
-      setError(`${t.errorPrefix} ${err.message || 'Unknown error'}`);
+      setError(`${t.errorPrefix} ${friendlyApiMessage(err.message, 'Unknown error')}`);
     } finally {
       setPostingCommentId(null);
     }
@@ -352,21 +348,22 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
   };
 
   const captionCount = draft.caption.length;
-  const canPost = patientId.trim() && draft.uploads.length > 0 && !posting;
-  const hypothesisLabel = useMemo(
-    () => SECOND_OPINION_DISEASE_OPTIONS.find((x) => x.value === currentHypothesis)?.label || '-',
-    [currentHypothesis]
-  );
+  const canPost = patientId.trim() && currentHypothesis.trim() && draft.uploads.length > 0 && !posting;
+  const missingPostRequirements = [
+    !patientId.trim() && t.missingPatient,
+    !currentHypothesis.trim() && t.missingHypothesis,
+    draft.uploads.length === 0 && t.missingImages,
+  ].filter(Boolean);
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-5">
+    <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-900">{t.title}</h2>
+        <h2 className="text-xl font-semibold text-slate-900">{t.title}</h2>
         {onViewHistory && (
           <button
             type="button"
             onClick={viewHistory}
-            className="inline-flex items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-700"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
           >
             <History className="h-4 w-4" />
             {t.patientHistory}
@@ -382,7 +379,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
             value={isAnonymous ? '' : doctorName}
             onChange={(e) => setDoctorName(e.target.value)}
             disabled={isAnonymous}
-            className={`w-full rounded-lg border border-gray-300 px-3 py-2 ${isAnonymous ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-900'}`}
+            className={`w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 ${isAnonymous ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'bg-white text-slate-900'}`}
             placeholder={t.doctorName}
           />
         </div>
@@ -392,7 +389,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
             type="text"
             value={doctorAffiliation}
             onChange={(e) => setDoctorAffiliation(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
             placeholder={t.affiliation}
           />
         </div>
@@ -402,7 +399,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
             type="text"
             value={patientId}
             onChange={(e) => setPatientId(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
             placeholder={t.patientId}
           />
         </div>
@@ -411,7 +408,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
           <select
             value={currentHypothesis}
             onChange={(e) => setCurrentHypothesis(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             {SECOND_OPINION_DISEASE_OPTIONS.map((option) => (
               <option key={option.value || 'none'} value={option.value}>
@@ -422,20 +419,20 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
         </div>
       </div>
 
-      <div className="rounded-lg border border-dashed border-gray-300 p-4">
+      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
             <Upload className="h-4 w-4" />
             {t.chooseImages}
-            <input type="file" multiple accept="image/*" onChange={handleFileAdd} className="hidden" />
+            <input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={handleFileAdd} className="hidden" />
           </label>
-          <span className="text-sm text-gray-500">{draft.uploads.length}/{SECOND_OPINION_MAX_IMAGES} file(s)</span>
+          <span className="text-sm text-slate-500">{draft.uploads.length}/{SECOND_OPINION_MAX_IMAGES} file(s)</span>
         </div>
 
         {draft.uploads.length > 0 && (
           <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
             {draft.uploads.map((item, idx) => (
-              <div key={idx} className="relative aspect-square overflow-hidden rounded-lg border border-gray-200">
+              <div key={idx} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200">
                 <button
                   type="button"
                   title={t.removeImage}
@@ -457,7 +454,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
           value={draft.caption}
           onChange={(e) => setDraft((prev) => ({ ...prev, caption: e.target.value.slice(0, CAPTION_MAX) }))}
           placeholder={t.addCaption}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
           rows={4}
           maxLength={CAPTION_MAX}
         />
@@ -471,7 +468,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
           <button
             type="button"
             onClick={resetDraft}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
           >
             {t.resetForm}
           </button>
@@ -484,9 +481,13 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
                 setIsAnonymous(checked);
                 if (checked) {
                   setDoctorName('');
+                } else {
+                  const profileName = (doctorProfile?.name || '').trim();
+                  const savedName = (window.localStorage.getItem(DOCTOR_NAME_STORAGE_KEY) || '').trim();
+                  setDoctorName(profileName || savedName);
                 }
               }}
-              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus:ring-brand-500"
             />
             <span>Post anonymously</span>
           </label>
@@ -495,12 +496,18 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
           type="button"
           onClick={postOpinion}
           disabled={!canPost}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           {posting ? t.posting : t.postSecondOpinion}
         </button>
       </div>
+
+      {missingPostRequirements.length > 0 && (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          {t.completeRequired} {missingPostRequirements.join(', ')}.
+        </p>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -510,13 +517,13 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       )}
 
       {posts.length > 0 && (
-        <div className="space-y-4 border-t border-gray-200 pt-4">
+        <div className="space-y-4 border-t border-slate-200 pt-4">
           {posts.map((post) => {
             const postCommentDraft = commentDrafts[post.id] ?? '';
 
             return (
-              <div key={post.id} className="rounded-lg border border-gray-200 p-4 space-y-3">
-                <p className="whitespace-pre-line text-sm text-gray-800">{post.caption || t.noCaption}</p>
+              <div key={post.id} className="space-y-3 rounded-lg border border-slate-200 p-4">
+                <p className="whitespace-pre-line text-sm text-slate-800">{post.caption || t.noCaption}</p>
                 {post.uploads.length > 0 && (
                   <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                     {post.uploads.map((item, idx) => (
@@ -530,19 +537,19 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
                   </div>
                 )}
 
-                <div className="border-t border-gray-100 pt-3">
-                  <h4 className="mb-2 text-sm font-semibold text-gray-800">{t.comments}</h4>
+                <div className="border-t border-slate-100 pt-3">
+                  <h4 className="mb-2 text-sm font-semibold text-slate-800">{t.comments}</h4>
                   {post.comments.length > 0 ? (
                     <div className="mb-3 space-y-2">
                       {post.comments.map((comment) => (
-                        <div key={comment.id} className="rounded-md bg-gray-50 px-3 py-2 text-sm">
-                          <span className="font-medium text-gray-700">{comment.author}: </span>
-                          <span className="text-gray-700">{comment.text}</span>
+                        <div key={comment.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm">
+                          <span className="font-medium text-slate-700">{comment.author}: </span>
+                          <span className="text-slate-700">{comment.text}</span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="mb-3 text-sm text-gray-500">{t.noComments}</p>
+                    <p className="mb-3 text-sm text-slate-500">{t.noComments}</p>
                   )}
 
                   <div className="flex gap-2 flex-wrap items-center">
@@ -556,7 +563,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
                         }))
                       }
                       placeholder={t.addComment}
-                      className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       disabled={postingCommentId === post.id}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
@@ -565,14 +572,14 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
                         }
                       }}
                     />
-                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-600 select-none whitespace-nowrap">
+                    <label className="flex cursor-pointer select-none items-center gap-1.5 whitespace-nowrap text-xs text-slate-600">
                       <input
                         type="checkbox"
                         checked={commentAnonymous[post.id] ?? false}
                         onChange={(e) =>
                           setCommentAnonymous((prev) => ({ ...prev, [post.id]: e.target.checked }))
                         }
-                        className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                       />
                       <span>{t.commentAnonymously}</span>
                     </label>
@@ -580,7 +587,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
                       type="button"
                       onClick={() => addComment(post.id, postCommentDraft)}
                       disabled={postingCommentId === post.id || !postCommentDraft.trim()}
-                      className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+                      className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:bg-slate-300"
                     >
                       {postingCommentId === post.id
                         ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -594,7 +601,6 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
           })}
         </div>
       )}
-      <div className="text-xs text-gray-500">{t.currentHypothesis}: {hypothesisLabel}</div>
     </div>
   );
 }

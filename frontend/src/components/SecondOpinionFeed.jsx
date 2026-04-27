@@ -6,6 +6,7 @@ import {
   fetchSecondOpinionPosts,
 } from '../services/secondOpinionService';
 import { authMe } from '../services/authService';
+import { friendlyApiMessage } from '../services/apiErrorService';
 
 const DOCTOR_NAME_STORAGE_KEY = 'suderm_second_opinion_doctor_name';
 
@@ -100,7 +101,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
       const data = await fetchSecondOpinionPosts();
       setPosts(data);
     } catch (err) {
-      setError(err.message || loadErrorText);
+      setError(friendlyApiMessage(err.message, loadErrorText));
       setPosts([]);
     } finally {
       setLoading(false);
@@ -179,7 +180,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
       setCommentDrafts((prev) => ({ ...prev, [postId]: '' }));
       setCommentAnonymous((prev) => ({ ...prev, [postId]: false }));
     } catch (err) {
-        setError(err.message || loadErrorText);
+        setError(friendlyApiMessage(err.message, loadErrorText));
     } finally {
       setPostingCommentId(null);
     }
@@ -216,23 +217,23 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
       await deleteSecondOpinionPost(post.id);
       setPosts((prev) => prev.filter((item) => item.id !== post.id));
     } catch (err) {
-      setError(err.message || loadErrorText);
+      setError(friendlyApiMessage(err.message, loadErrorText));
     } finally {
       setDeletingPostId(null);
     }
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
+    <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">{t.title}</h2>
-          <p className="text-sm text-gray-500">{t.subtitle}</p>
+          <h2 className="text-xl font-semibold text-slate-900">{t.title}</h2>
+          <p className="text-sm text-slate-500">{t.subtitle}</p>
         </div>
         <button
           type="button"
           onClick={loadPosts}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           {loading ? t.refreshing : t.refresh}
@@ -245,12 +246,12 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder={t.search}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
       </div>
 
       {error && (
-        <div className="mx-6 mt-6 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:mx-8">
+        <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           {error}
         </div>
@@ -271,32 +272,32 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
             const draftValue = commentDrafts[post.id] ?? '';
 
             return (
-              <article key={post.id} className="rounded-lg border border-gray-200 p-4">
+              <article key={post.id} className="rounded-lg border border-slate-200 p-4">
                 <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold uppercase text-white">
+                        <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase text-white">
                         {post.doctorName || 'Doctor'}
                       </span>
                       {post.affiliation && (
-                        <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
                           {post.affiliation}
                         </span>
                       )}
                     </div>
-                    <p className="max-w-3xl whitespace-pre-line text-sm leading-6 text-gray-700">{post.caption}</p>
+                    <p className="max-w-3xl whitespace-pre-line text-sm leading-6 text-slate-700">{post.caption}</p>
                     <div className="flex flex-wrap gap-2">
                       {metadataPills.length > 0 ? (
                         metadataPills.map((pill) => (
                           <span
                             key={`${post.id}-${pill.label}-${pill.value}`}
-                            className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-700"
+                            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-700"
                           >
                             {pill.label}: {pill.value}
                           </span>
                         ))
                       ) : (
-                        <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-500">
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500">
                           {t.metadata}: Not provided
                         </span>
                       )}
@@ -327,7 +328,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
                     <button
                       type="button"
                       onClick={() => handleViewHistory(post)}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-700"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                       aria-label="View patient history"
                     >
                       <History className="h-4 w-4" />
@@ -350,8 +351,8 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
                   </div>
                 )}
 
-                <div className="border-t border-gray-100 pt-3">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-800">
+                <div className="border-t border-slate-100 pt-3">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
                     <MessageSquareText className="h-4 w-4" />
                     {t.comments} ({post.comments.length})
                   </div>
@@ -359,16 +360,16 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
                   {post.comments.length > 0 ? (
                     <div className="space-y-2">
                       {post.comments.map((comment) => (
-                        <div key={comment.id} className="rounded-md bg-gray-50 px-3 py-2 text-sm">
-                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        <div key={comment.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm">
+                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                             {comment.author}
                           </div>
-                          <p className="mt-1 whitespace-pre-line text-sm text-gray-700">{comment.text}</p>
+                          <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{comment.text}</p>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                    <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
                       {t.noComment}
                     </div>
                   )}
@@ -378,7 +379,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
                       type="text"
                       value={draftValue}
                       placeholder={t.addComment}
-                      className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       disabled={postingCommentId === post.id}
                       onChange={(e) =>
                         setCommentDrafts((prev) => ({
@@ -393,14 +394,14 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
                         }
                       }}
                     />
-                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-600 select-none whitespace-nowrap">
+                    <label className="flex cursor-pointer select-none items-center gap-1.5 whitespace-nowrap text-xs text-slate-600">
                       <input
                         type="checkbox"
                         checked={commentAnonymous[post.id] ?? false}
                         onChange={(e) =>
                           setCommentAnonymous((prev) => ({ ...prev, [post.id]: e.target.checked }))
                         }
-                        className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                       />
                       <span>{t.commentAnonymously}</span>
                     </label>
@@ -408,7 +409,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
                       type="button"
                       onClick={() => addComment(post.id, draftValue)}
                       disabled={postingCommentId === post.id || !draftValue.trim()}
-                      className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+                      className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:bg-slate-300"
                     >
                       {postingCommentId === post.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareText className="h-4 w-4" />}
                       {t.addComment}

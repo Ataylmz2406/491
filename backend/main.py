@@ -3,19 +3,22 @@ import os
 import uuid
 import sqlite3
 import hashlib
+import hmac
+import logging
 import secrets
 import base64
 import binascii
+import re
 from datetime import datetime, timezone, timedelta
 import torch
 import numpy as np
 import torch.nn.functional as F
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query, Header, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query, Header, Request, Response, Cookie
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from contextlib import asynccontextmanager
 from model_utils import (
     DualHierarchicalModel, 
@@ -32,6 +35,12 @@ from model_utils import (
 MODEL_WEIGHTS = "Weights_DualEffV2_Funnel_20251129_1830.pth"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "suderm.db")
+logger = logging.getLogger("suderm")
+
+PREDICT_ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+PREDICT_MAX_IMAGE_BYTES = 8 * 1024 * 1024
+PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
+PASSWORD_HASH_ITERATIONS = 310_000
 
 # Prefer CUDA > MPS (Apple Silicon) > CPU
 if torch.cuda.is_available():
@@ -136,6 +145,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS auth_tokens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 token_hash TEXT NOT NULL UNIQUE,
+                token_type TEXT NOT NULL DEFAULT 'access',
                 user_type TEXT NOT NULL,
                 subject TEXT NOT NULL,
                 display_name TEXT NOT NULL,
@@ -313,7 +323,10 @@ SECOND_OPINION_MAX_IMAGE_DATA_URL_CHARS = 3_000_000
 SECOND_OPINION_POST_MAX_REQUEST_BYTES = 12 * 1024 * 1024
 SECOND_OPINION_MAX_QUESTION_LEN = 4000
 SECOND_OPINION_MAX_COMMENT_LEN = 2000
-AUTH_TOKEN_TTL_HOURS = 24
+AUTH_ACCESS_TOKEN_TTL_MINUTES = int(os.environ.get("SUDERM_ACCESS_TOKEN_TTL_MINUTES", "15"))
+AUTH_REFRESH_TOKEN_TTL_DAYS = int(os.environ.get("SUDERM_REFRESH_TOKEN_TTL_DAYS", "7"))
+AUTH_REFRESH_COOKIE_NAME = "suderm_refresh_token"
+AUTH_REFRESH_COOKIE_SECURE = os.environ.get("SUDERM_SECURE_COOKIES", "").lower() == "true"
 AUTH_ALLOWED_USER_TYPES = {"doctor", "researcher", "personal"}
 
 
@@ -502,7 +515,7 @@ def _verify_auth_token(authorization: str) -> sqlite3.Row:
             """
             SELECT user_type, subject, display_name, expires_at, revoked_at
             FROM auth_tokens
-            WHERE token_hash = ?
+            WHERE token_hash = ? AND token_type = 'access'
             """,
             (token_hash,),
         ).fetchone()
@@ -524,21 +537,77 @@ def _verify_doctor_token(authorization: str) -> sqlite3.Row:
     return token_row
 
 
-def _issue_auth_token(user_type: str, subject: str, display_name: str, email: str | None = None, full_name: str | None = None, phone_number: str | None = None, hospital: str | None = None, doctor_id: str | None = None) -> AuthLoginResponse:
+def _verify_refresh_token(refresh_token: str | None) -> sqlite3.Row:
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Missing refresh token")
+
+    token_hash = _hash_token(refresh_token)
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT user_type, subject, display_name, expires_at, revoked_at
+            FROM auth_tokens
+            WHERE token_hash = ? AND token_type = 'refresh'
+            """,
+            (token_hash,),
+        ).fetchone()
+        if not row or row["revoked_at"] is not None:
+            raise HTTPException(status_code=401, detail="Invalid or revoked refresh token")
+
+        if datetime.fromisoformat(row["expires_at"]) <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=401, detail="Refresh token expired")
+        return row
+    finally:
+        conn.close()
+
+
+def _revoke_raw_token(raw_token: str | None, token_type: str | None = None) -> None:
+    if not raw_token:
+        return
+
+    token_hash = _hash_token(raw_token)
+    now = utc_now_iso()
+    conn = get_db_connection()
+    try:
+        if token_type:
+            conn.execute(
+                """
+                UPDATE auth_tokens
+                SET revoked_at = ?
+                WHERE token_hash = ? AND token_type = ? AND revoked_at IS NULL
+                """,
+                (now, token_hash, token_type),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE auth_tokens
+                SET revoked_at = ?
+                WHERE token_hash = ? AND revoked_at IS NULL
+                """,
+                (now, token_hash),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _issue_token_record(user_type: str, subject: str, display_name: str, token_type: str, expires_at: datetime) -> str:
     raw_token = secrets.token_urlsafe(32)
     token_hash = _hash_token(raw_token)
     now = datetime.now(timezone.utc)
-    expires_at = now.replace(microsecond=0) + timedelta(hours=AUTH_TOKEN_TTL_HOURS)
 
     conn = get_db_connection()
     try:
         conn.execute(
             """
-            INSERT INTO auth_tokens (token_hash, user_type, subject, display_name, created_at, expires_at, revoked_at)
-            VALUES (?, ?, ?, ?, ?, ?, NULL)
+            INSERT INTO auth_tokens (token_hash, token_type, user_type, subject, display_name, created_at, expires_at, revoked_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
             """,
             (
                 token_hash,
+                token_type,
                 user_type,
                 subject,
                 display_name,
@@ -550,10 +619,47 @@ def _issue_auth_token(user_type: str, subject: str, display_name: str, email: st
     finally:
         conn.close()
 
+    return raw_token
+
+
+def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    response.set_cookie(
+        key=AUTH_REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        max_age=AUTH_REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=AUTH_REFRESH_COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(key=AUTH_REFRESH_COOKIE_NAME, path="/")
+
+
+def _issue_auth_session(
+    response: Response,
+    user_type: str,
+    subject: str,
+    display_name: str,
+    email: str | None = None,
+    full_name: str | None = None,
+    phone_number: str | None = None,
+    hospital: str | None = None,
+    doctor_id: str | None = None,
+) -> AuthLoginResponse:
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    access_expires_at = now + timedelta(minutes=AUTH_ACCESS_TOKEN_TTL_MINUTES)
+    refresh_expires_at = now + timedelta(days=AUTH_REFRESH_TOKEN_TTL_DAYS)
+    raw_access_token = _issue_token_record(user_type, subject, display_name, "access", access_expires_at)
+    raw_refresh_token = _issue_token_record(user_type, subject, display_name, "refresh", refresh_expires_at)
+    _set_refresh_cookie(response, raw_refresh_token)
+
     return AuthLoginResponse(
-        access_token=raw_token,
+        access_token=raw_access_token,
         token_type="bearer",
-        expires_at=expires_at.isoformat(),
+        expires_at=access_expires_at.isoformat(),
         user_type=user_type,
         display_name=display_name,
         email=email,
@@ -1020,6 +1126,8 @@ def ensure_auth_token_schema_columns():
         }
         if "subject" not in token_columns:
             conn.execute("ALTER TABLE auth_tokens ADD COLUMN subject TEXT")
+        if "token_type" not in token_columns:
+            conn.execute("ALTER TABLE auth_tokens ADD COLUMN token_type TEXT NOT NULL DEFAULT 'access'")
 
         conn.execute(
             """
@@ -1028,6 +1136,13 @@ def ensure_auth_token_schema_columns():
             WHERE (subject IS NULL OR trim(subject) = '')
               AND display_name IS NOT NULL
               AND trim(display_name) != ''
+            """
+        )
+        conn.execute(
+            """
+            UPDATE auth_tokens
+            SET token_type = 'access'
+            WHERE token_type IS NULL OR trim(token_type) = ''
             """
         )
         conn.commit()
@@ -1171,21 +1286,21 @@ async def lifespan(app: FastAPI):
     ensure_second_opinion_strict_constraints()
     
     # 2. Initialize Model
-    print(f"Initializing model on {DEVICE}...")
+    logger.info("Initializing model on %s", DEVICE)
     model = DualHierarchicalModel(arch='tf_efficientnetv2_xl.in21k_ft_in1k', emb_dim=512, dropout=0.2)
     
     # 3. Load Weights
     if os.path.exists(MODEL_WEIGHTS):
-        print(f"Loading weights from {MODEL_WEIGHTS}...")
+        logger.info("Loading weights from %s", MODEL_WEIGHTS)
         try:
             state_dict = torch.load(MODEL_WEIGHTS, map_location=DEVICE)
             model.load_state_dict(state_dict, strict=False) 
-            print("✅ Weights loaded successfully.")
+            logger.info("Weights loaded successfully.")
         except Exception as e:
-            print(f"❌ Error loading weights: {e}")
-            print("⚠️ Server starting with RANDOM weights (for testing only).")
+            logger.error("Error loading weights: %s", e)
+            logger.warning("Server starting with random weights.")
     else:
-        print(f"⚠️ Weights file {MODEL_WEIGHTS} not found. Starting with RANDOM weights.")
+        logger.warning("Weights file %s not found. Server starting with random weights.", MODEL_WEIGHTS)
     
     model.to(DEVICE)
     model.eval()
@@ -1226,9 +1341,15 @@ os.makedirs(HEATMAP_DIR, exist_ok=True)
 app.mount("/heatmap", StaticFiles(directory=HEATMAP_DIR), name="heatmaps")
 
 # --- MIDDLEWARE ---
+configured_origins = os.environ.get(
+    "SUDERM_CORS_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173",
+)
+allowed_origins = [origin.strip() for origin in configured_origins.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1280,6 +1401,30 @@ def check_zoom_level(img: Image.Image):
     return "OK"
 
 
+async def _read_prediction_image(upload: UploadFile, label: str) -> Image.Image:
+    content_type = (upload.content_type or "").lower()
+    if content_type not in PREDICT_ALLOWED_IMAGE_MIME_TYPES:
+        allowed = ", ".join(sorted(PREDICT_ALLOWED_IMAGE_MIME_TYPES))
+        raise HTTPException(status_code=400, detail=f"{label} must be a supported image type: {allowed}")
+
+    image_bytes = await upload.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail=f"{label} is empty")
+
+    if len(image_bytes) > PREDICT_MAX_IMAGE_BYTES:
+        max_mb = PREDICT_MAX_IMAGE_BYTES / (1024 * 1024)
+        raise HTTPException(status_code=413, detail=f"{label} exceeds maximum size ({max_mb:.0f} MB)")
+
+    try:
+        return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    except (UnidentifiedImageError, OSError, ValueError):
+        raise HTTPException(status_code=400, detail=f"{label} could not be decoded as an image")
+
+
+def _zero_clinical_tensor():
+    return torch.zeros((1, 3, IMG_SIZE, IMG_SIZE), device=DEVICE)
+
+
 
 # --- ENDPOINTS ---
 
@@ -1288,13 +1433,41 @@ def read_root():
     return {"message": "SUDerm - Dual-Branch Skin Lesion Analysis API (Sabanci University)"}
 
 
-import hashlib
-import sqlite3
-import re
-
 def _hash_password(password: str) -> str:
-    # A simple deterministic hash for demonstration; in prod use passlib/bcrypt
-    return hashlib.sha256(f"suderm_salt_{password}".encode('utf-8')).hexdigest()
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        PASSWORD_HASH_ITERATIONS,
+    ).hex()
+    return f"{PASSWORD_HASH_ALGORITHM}${PASSWORD_HASH_ITERATIONS}${salt}${digest}"
+
+
+def _legacy_hash_password(password: str) -> str:
+    return hashlib.sha256(f"suderm_salt_{password}".encode("utf-8")).hexdigest()
+
+
+def _verify_password(password: str, stored_hash: str | None) -> bool:
+    if not stored_hash:
+        return False
+
+    if stored_hash.startswith(f"{PASSWORD_HASH_ALGORITHM}$"):
+        try:
+            _, iterations_raw, salt, expected = stored_hash.split("$", 3)
+            iterations = int(iterations_raw)
+        except (ValueError, TypeError):
+            return False
+
+        digest = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt.encode("utf-8"),
+            iterations,
+        ).hex()
+        return hmac.compare_digest(digest, expected)
+
+    return hmac.compare_digest(_legacy_hash_password(password), stored_hash)
 
 
 def _validate_password(password: str) -> tuple[bool, str]:
@@ -1323,7 +1496,7 @@ def _validate_password(password: str) -> tuple[bool, str]:
     return True, ""
 
 @app.post("/auth/register", response_model=AuthLoginResponse)
-def auth_register(payload: AuthLoginRequest):
+def auth_register(payload: AuthLoginRequest, response: Response):
     user_type = payload.user_type.strip().lower()
     if user_type not in AUTH_ALLOWED_USER_TYPES:
         allowed = ", ".join(sorted(AUTH_ALLOWED_USER_TYPES))
@@ -1392,7 +1565,8 @@ def auth_register(payload: AuthLoginRequest):
     finally:
         conn.close()
 
-    return _issue_auth_token(
+    return _issue_auth_session(
+        response=response,
         user_type=user_type,
         subject=subject,
         display_name=display_name,
@@ -1404,16 +1578,14 @@ def auth_register(payload: AuthLoginRequest):
     )
 
 @app.post("/auth/login", response_model=AuthLoginResponse)
-def auth_login(payload: AuthLoginRequest):
+def auth_login(payload: AuthLoginRequest, response: Response):
     user_type = payload.user_type.strip().lower()
     if user_type not in AUTH_ALLOWED_USER_TYPES:
         allowed = ", ".join(sorted(AUTH_ALLOWED_USER_TYPES))
         raise HTTPException(status_code=400, detail=f"Invalid user_type. Allowed values: {allowed}")
 
-    # Validate password format
-    is_valid, error_msg = _validate_password(payload.password)
-    if not is_valid:
-        raise HTTPException(status_code=400, detail=error_msg)
+    if not payload.password:
+        raise HTTPException(status_code=400, detail="Password is required")
 
     if user_type == "doctor":
         email = _clean_optional_text(payload.email, 255)
@@ -1426,19 +1598,28 @@ def auth_login(payload: AuthLoginRequest):
             raise HTTPException(status_code=400, detail="email is required for login")
         subject = email.lower()
 
-    password_hash = _hash_password(payload.password)
-    
     conn = get_db_connection()
     try:
         user = conn.execute(
-            "SELECT display_name, email, full_name, phone_number, hospital, doctor_id FROM users WHERE subject = ? AND user_type = ? AND password_hash = ?",
-            (subject, user_type, password_hash)
+            """
+            SELECT display_name, password_hash, email, full_name, phone_number, hospital, doctor_id
+            FROM users
+            WHERE subject = ? AND user_type = ?
+            """,
+            (subject, user_type)
         ).fetchone()
         
-        if not user:
+        if not user or not _verify_password(payload.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Invalid credentials or user not registered")
             
         display_name = user["display_name"]
+
+        if not user["password_hash"].startswith(f"{PASSWORD_HASH_ALGORITHM}$"):
+            conn.execute(
+                "UPDATE users SET password_hash = ? WHERE subject = ? AND user_type = ?",
+                (_hash_password(payload.password), subject, user_type),
+            )
+            conn.commit()
         email = user["email"]
         full_name = user["full_name"]
         phone_number = user["phone_number"]
@@ -1447,7 +1628,8 @@ def auth_login(payload: AuthLoginRequest):
     finally:
         conn.close()
 
-    return _issue_auth_token(
+    return _issue_auth_session(
+        response=response,
         user_type=user_type,
         subject=subject,
         display_name=display_name,
@@ -1456,6 +1638,22 @@ def auth_login(payload: AuthLoginRequest):
         phone_number=phone_number,
         hospital=hospital,
         doctor_id=doctor_id,
+    )
+
+
+@app.post("/auth/refresh", response_model=AuthLoginResponse)
+def auth_refresh(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None, alias=AUTH_REFRESH_COOKIE_NAME),
+):
+    token_row = _verify_refresh_token(refresh_token)
+    _revoke_raw_token(refresh_token, "refresh")
+
+    return _issue_auth_session(
+        response=response,
+        user_type=token_row["user_type"],
+        subject=token_row["subject"],
+        display_name=token_row["display_name"],
     )
 
 
@@ -1470,27 +1668,21 @@ def auth_me(authorization: str = Header(default="")):
 
 
 @app.post("/auth/logout")
-def auth_logout(authorization: str = Header(default="")):
-    token = _extract_bearer_token(authorization)
-    token_hash = _hash_token(token)
-    now = utc_now_iso()
+def auth_logout(
+    response: Response,
+    authorization: str = Header(default=""),
+    refresh_token: str | None = Cookie(default=None, alias=AUTH_REFRESH_COOKIE_NAME),
+):
+    if authorization:
+        try:
+            _revoke_raw_token(_extract_bearer_token(authorization), "access")
+        except HTTPException:
+            pass
+    if refresh_token:
+        _revoke_raw_token(refresh_token, "refresh")
 
-    conn = get_db_connection()
-    try:
-        cursor = conn.execute(
-            """
-            UPDATE auth_tokens
-            SET revoked_at = ?
-            WHERE token_hash = ? AND revoked_at IS NULL
-            """,
-            (now, token_hash),
-        )
-        conn.commit()
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=401, detail="Invalid or already revoked token")
-        return {"ok": True}
-    finally:
-        conn.close()
+    _clear_refresh_cookie(response)
+    return {"ok": True}
 
 
 @app.post("/doctor/save-analysis")
@@ -1498,6 +1690,7 @@ def save_doctor_analysis(
     authorization: str = Header(default=""),
     patient_id: str = Form(None),
     prediction: str = Form(None),
+    diagnosis: str = Form(None),
     confidence_score: float = Form(None),
     lesion_location: str = Form(None),
     age_group: str = Form(None),
@@ -1506,6 +1699,25 @@ def save_doctor_analysis(
 ):
     """Save a diagnosis analysis for a doctor."""
     token_row = _verify_doctor_token(authorization)
+    clean_patient_id = _clean_optional_text(patient_id, 120)
+    clean_prediction = _clean_optional_text(prediction, 120) or _clean_optional_text(diagnosis, 120)
+    clean_lesion_location = _clean_optional_text(lesion_location, 120)
+
+    missing_fields = []
+    if not clean_patient_id:
+        missing_fields.append("patient_id")
+    if not clean_prediction:
+        missing_fields.append("prediction")
+    if confidence_score is None:
+        missing_fields.append("confidence_score")
+    if not clean_lesion_location:
+        missing_fields.append("lesion_location")
+
+    if missing_fields:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required analysis field(s): {', '.join(missing_fields)}",
+        )
     
     conn = get_db_connection()
     try:
@@ -1524,20 +1736,20 @@ def save_doctor_analysis(
             """,
             (
                 now,
-                prediction or "",
-                confidence_score or 0.0,
-                lesion_location or "",
+                clean_prediction,
+                confidence_score,
+                clean_lesion_location,
                 "completed",
-                patient_id,
+                clean_patient_id,
                 age_group,
                 sex,
                 skin_tone,
                 doctor_id,
                 doctor_name,
-                prediction or "",
-                confidence_score or 0.0,
+                clean_prediction,
+                confidence_score,
                 now,
-                lesion_location or "",
+                clean_lesion_location,
             ),
         )
         conn.commit()
@@ -1545,10 +1757,10 @@ def save_doctor_analysis(
         return {
             "id": cursor.lastrowid,
             "date": now,
-            "prediction": prediction,
+            "prediction": clean_prediction,
             "confidence_score": confidence_score,
-            "patient_id": patient_id,
-            "lesion_location": lesion_location,
+            "patient_id": clean_patient_id,
+            "lesion_location": clean_lesion_location,
         }
     finally:
         conn.close()
@@ -1763,6 +1975,10 @@ def create_second_opinion_post(
     if not question_text:
         raise HTTPException(status_code=400, detail="question_text is required")
 
+    current_hypothesis = _clean_optional_text(payload.current_hypothesis, 120)
+    if not current_hypothesis:
+        raise HTTPException(status_code=400, detail="current_hypothesis is required")
+
     if len(payload.image_urls) > SECOND_OPINION_MAX_IMAGES:
         raise HTTPException(
             status_code=400,
@@ -1797,7 +2013,7 @@ def create_second_opinion_post(
                 doctor_name,
                 doctor_affiliation,
                 _clean_optional_text(payload.patient_id, 120),
-                _clean_optional_text(payload.current_hypothesis, 120),
+                current_hypothesis,
                 question_text,
                 _clean_optional_text(payload.lesion_location, 120),
                 _clean_optional_text(payload.diagnosis, 120),
@@ -1965,58 +2181,57 @@ def delete_second_opinion_post(post_id: int, authorization: str = Header(default
 @app.post("/predict")
 async def predict(
     dermoscopic_image: UploadFile = File(...),
+    dermoscopic_image_2: UploadFile = File(None),
+    dermoscopic_image_3: UploadFile = File(None),
+    dermoscopic_image_4: UploadFile = File(None),
     clinical_image: UploadFile = File(None),
     lesion_location: str = Form(None),
     diagnosis: str = Form(None)
 ):
-    if not dermoscopic_image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Dermoscopic file must be an image")
-    
-    if clinical_image and not clinical_image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Clinical file must be an image")
-        
-    print(f"--- Analysis Request ---")
-    print(f"Location: {lesion_location}, Dx: {diagnosis}")
-    
     # Smart Mapping for Location
     location_vector = encode_location(lesion_location)
     location_vec_list = location_vector.tolist()
 
     try:
-        # 1. Process Dermoscopic Image (Required)
-        derm_bytes = await dermoscopic_image.read()
-        derm_img = Image.open(io.BytesIO(derm_bytes)).convert("RGB")
-        derm_tensor = transform(derm_img).unsqueeze(0).to(DEVICE)
+        dermoscopic_uploads = [
+            dermoscopic_image,
+            dermoscopic_image_2,
+            dermoscopic_image_3,
+            dermoscopic_image_4,
+        ]
+        dermoscopic_images = [
+            await _read_prediction_image(upload, f"Dermoscopic image {idx}")
+            for idx, upload in enumerate(dermoscopic_uploads, start=1)
+            if upload is not None
+        ]
+
+        if not dermoscopic_images:
+            raise HTTPException(status_code=400, detail="At least one dermoscopic image is required")
+
+        logger.info("Analysis request received with %s dermoscopic image(s)", len(dermoscopic_images))
         
-        # 2. Process Clinical Image (Optional - Fallback to Zero)
         zoom_warning = "N/A"
         if clinical_image:
-            clin_bytes = await clinical_image.read()
-            clin_img = Image.open(io.BytesIO(clin_bytes)).convert("RGB")
+            clin_img = await _read_prediction_image(clinical_image, "Clinical image")
             zoom_warning = check_zoom_level(clin_img)
             clin_tensor = transform(clin_img).unsqueeze(0).to(DEVICE)
         else:
-            clin_tensor = torch.zeros((1, 3, IMG_SIZE, IMG_SIZE), device=DEVICE)
-            print("ℹ️ Clinical image missing. Using zero-tensor fallback.")
+            clin_tensor = _zero_clinical_tensor()
 
-        # 3. Fast Inference (prediction only, no Grad-CAM)
+        prediction_tensors = []
         with torch.no_grad():
-            l_grp, l_mel, l_oth = model(clin_tensor, derm_tensor)
-            probs = stitch_predictions(l_grp, l_mel, l_oth)
+            for derm_img in dermoscopic_images:
+                derm_tensor = transform(derm_img).unsqueeze(0).to(DEVICE)
+                l_grp, l_mel, l_oth = model(clin_tensor, derm_tensor)
+                prediction_tensors.append(stitch_predictions(l_grp, l_mel, l_oth))
+                del derm_tensor
         
-        # 🔍 DEBUG: Log raw probabilities
+        probs = torch.stack(prediction_tensors, dim=0).mean(dim=0)
         probs_np = probs[0].cpu().numpy()
-        print("\n=== RAW PROBABILITIES ===")
-        for i, (name, prob) in enumerate(zip(CLASS_NAMES, probs_np)):
-            print(f"{name:10s}: {prob:.4f} ({prob*100:.2f}%)")
-        print(f"Sum: {probs_np.sum():.4f}")
-        print("========================\n")
             
-        # 4. Interpret Result
         pred_label, conf_score = interpret_prediction(probs)
 
-        # 5. Memory cleanup for MPS
-        del clin_tensor, derm_tensor
+        del clin_tensor
         if DEVICE.type == 'mps':
             torch.mps.empty_cache()
 
@@ -2039,12 +2254,16 @@ async def predict(
             }
         }
 
+    except HTTPException:
+        if DEVICE.type == 'mps':
+            torch.mps.empty_cache()
+        raise
     except Exception as e:
         # Cleanup on error too
         if DEVICE.type == 'mps':
             torch.mps.empty_cache()
-        print(f"Prediction Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Prediction error: %s", e)
+        raise HTTPException(status_code=500, detail="Analysis service could not process the image. Please try again.")
 
 
 # --- IMAGE LABELING ENDPOINTS ---

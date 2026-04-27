@@ -85,7 +85,7 @@ export default function Sidebar({
     const UNIFIED_LOCATIONS = t.locationOptions;
 
     return (
-        <aside className="flex-shrink-0 w-80 bg-slate-900 text-white flex flex-col shadow-2xl">
+        <aside className="flex-shrink-0 w-80 h-full bg-slate-900 text-white flex flex-col shadow-2xl">
             <div className="p-6 border-b border-slate-700 bg-slate-950">
                 <div
                 className={`flex items-center gap-2 mb-1 ${onLogoClick ? 'cursor-pointer' : ''}`}
@@ -225,4 +225,3 @@ export default function Sidebar({
         </aside>
     );
 }
-

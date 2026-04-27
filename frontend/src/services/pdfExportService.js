@@ -424,8 +424,9 @@ export class PDFExportService {
    * Generate simple text export (for email, copy-paste)
    */
   static generateTextReport(caseData, language = 'en') {
+    const locale = language === 'tr' ? 'tr-TR' : 'en-US';
     const formatDate = (dateString) => {
-      return new Date(dateString).toLocaleDateString();
+      return new Date(dateString).toLocaleDateString(locale);
     };
 
     const CLASS_NAMES = {
