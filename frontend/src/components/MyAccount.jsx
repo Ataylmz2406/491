@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Calendar, MapPin, Activity, LogOut } from 'lucide-react';
-import { getAccessToken } from '../services/authService';
+import { authFetch } from '../services/authService';
+import { friendlyApiMessage } from '../services/apiErrorService';
 
 const CLASS_NAME_MAP = {
   "AKIEC": "Actinic keratosis / intraepidermal carcinoma",
@@ -61,17 +62,16 @@ export default function MyAccount({ language = 'en', loginData, userType, onBack
   };
 
   const t = translations[language] || translations.en;
+  const analysesErrorText = t.error;
 
   useEffect(() => {
     const fetchAnalyses = async () => {
       setLoading(true);
       setError(null);
       try {
-        const token = getAccessToken();
-        const response = await fetch('/api/doctor/analyses', {
+        const response = await authFetch('/doctor/analyses', {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         });
@@ -85,7 +85,7 @@ export default function MyAccount({ language = 'en', loginData, userType, onBack
         console.log('Loaded analyses:', Array.isArray(data) ? data : data.analyses || []);
       } catch (err) {
         console.error('Error fetching analyses:', err);
-        setError(err.message);
+        setError(friendlyApiMessage(err.message, analysesErrorText));
         setAnalyses([]);
       } finally {
         setLoading(false);
@@ -95,7 +95,7 @@ export default function MyAccount({ language = 'en', loginData, userType, onBack
     if (userType === 'doctor') {
       fetchAnalyses();
     }
-  }, [userType]);
+  }, [userType, analysesErrorText]);
 
   const getDiagnosisLabel = (diagnosis) => {
     if (!diagnosis) return 'Not specified';
