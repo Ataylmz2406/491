@@ -110,6 +110,8 @@ export default function ImageUploader({
                             alt="Zoomed view"
                         />
                         <button
+                            type="button"
+                            aria-label="Close zoomed image"
                             onClick={() => setZoomedImage(null)}
                             className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/40 rounded-lg transition-colors z-10"
                         >
@@ -148,7 +150,11 @@ export default function ImageUploader({
                         </div>
                     </div>
                 </div>
-                {dermFiles.length > 0 && <button onClick={() => clearFile('dermoscopic')}><X className="w-8 h-8 text-gray-400 hover:text-red-500" /></button>}
+                {dermFiles.length > 0 && (
+                    <button type="button" aria-label="Clear dermoscopic images" onClick={() => clearFile('dermoscopic')}>
+                        <X className="w-8 h-8 text-gray-400 hover:text-red-500" />
+                    </button>
+                )}
                 </div>
 
                 {dermPreviews.length === 0 ? (
@@ -180,25 +186,30 @@ export default function ImageUploader({
                                         alt={`Dermoscopic preview ${index + 1}`}
                                         onClick={() => setZoomedImage(preview)}
                                     />
-                                    <div 
-                                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                                    <button
+                                        type="button"
+                                        aria-label={`Zoom dermoscopic image ${index + 1}`}
+                                        className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/20 opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white sm:bg-black/40 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
                                         onClick={() => setZoomedImage(preview)}
                                     >
                                         <ZoomIn className="w-8 h-8 text-white" />
-                                    </div>
+                                    </button>
                                     <button
+                                        type="button"
+                                        aria-label={`Remove dermoscopic image ${index + 1}`}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             clearFile('dermoscopic', index);
                                         }}
-                                        className="absolute top-2 right-2 p-1 bg-red-500/80 hover:bg-red-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                        className="absolute top-2 right-2 z-10 rounded-lg bg-red-500/80 p-1 opacity-100 transition-opacity hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-white sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
                                     >
                                         <X className="w-4 h-4 text-white" />
                                     </button>
-                                    <div className="absolute bottom-2 left-2 right-2 z-10 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                    <div className="absolute bottom-2 left-2 right-2 z-10 flex gap-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
                                         <button
                                             type="button"
                                             title={t.rotateImage}
+                                            aria-label={`${t.rotateImage} ${index + 1}`}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 editDermoscopicImage?.(index, 'rotate-right');
@@ -211,6 +222,7 @@ export default function ImageUploader({
                                         <button
                                             type="button"
                                             title={t.cropSquare}
+                                            aria-label={`${t.cropSquare} ${index + 1}`}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 editDermoscopicImage?.(index, 'crop-square');
@@ -265,7 +277,11 @@ export default function ImageUploader({
                         <ImageIcon className="w-8 h-8 text-brand-600" /> {t.clinicalHeader}
                         <span className="text-[13px] font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full uppercase">{t.optional}</span>
                     </h3>
-                    {clinFile && <button onClick={() => clearFile('clinical')}><X className="w-8 h-8 text-gray-400 hover:text-red-500" /></button>}
+                    {clinFile && (
+                        <button type="button" aria-label="Clear clinical image" onClick={() => clearFile('clinical')}>
+                            <X className="w-8 h-8 text-gray-400 hover:text-red-500" />
+                        </button>
+                    )}
                 </div>
 
                 {!clinPreview ? (

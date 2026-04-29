@@ -223,46 +223,52 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
             <form className="space-y-4 mb-6">
               {/* Full Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="register-full-name" className="block text-sm font-medium text-gray-700 mb-2">
                   <User className="w-4 h-4 inline mr-2" />
                   Full Name <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="register-full-name"
                   type="text"
                   value={formData.fullName}
                   onChange={(e) => handleInputChange('fullName', e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   placeholder="John Smith"
+                  autoComplete="name"
                 />
               </div>
 
               {/* Email */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="register-email" className="block text-sm font-medium text-gray-700 mb-2">
                   <Mail className="w-4 h-4 inline mr-2" />
                   Email <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="register-email"
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   placeholder="you@example.com"
+                  autoComplete="email"
                 />
               </div>
 
               {/* Phone Number */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="register-phone-number" className="block text-sm font-medium text-gray-700 mb-2">
                   <Phone className="w-4 h-4 inline mr-2" />
                   Phone Number <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="register-phone-number"
                   type="tel"
                   value={formData.phoneNumber}
                   onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   placeholder="+1 (555) 123-4567"
+                  autoComplete="tel"
                 />
               </div>
 
@@ -270,24 +276,27 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
               {userType === 'doctor' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="register-hospital-name" className="block text-sm font-medium text-gray-700 mb-2">
                       <Building className="w-4 h-4 inline mr-2" />
                       Hospital/Organization <span className="text-red-500">*</span>
                     </label>
                     <input
+                      id="register-hospital-name"
                       type="text"
                       value={formData.hospitalName}
                       onChange={(e) => handleInputChange('hospitalName', e.target.value)}
                       className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                       placeholder="Medical Center Name"
+                      autoComplete="organization"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="register-doctor-id" className="block text-sm font-medium text-gray-700 mb-2">
                       Doctor ID <span className="text-red-500">*</span>
                     </label>
                     <input
+                      id="register-doctor-id"
                       type="text"
                       value={formData.doctorId}
                       onChange={(e) => handleInputChange('doctorId', e.target.value)}
@@ -345,20 +354,23 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
           <form onSubmit={handleSubmit} className="space-y-4 mb-6">
             {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="register-password" className="block text-sm font-medium text-gray-700 mb-2">
                 <Lock className="w-4 h-4 inline mr-2" />
                 Password <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input
+                  id="register-password"
                   type={showPassword ? 'text' : 'password'}
                   value={credentials.password}
                   onChange={handlePasswordChange}
                   className="w-full rounded-lg border border-slate-300 px-4 py-2.5 pr-12 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   placeholder="Enter a strong password"
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                 >
@@ -396,20 +408,23 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="register-confirm-password" className="block text-sm font-medium text-gray-700 mb-2">
                 <Lock className="w-4 h-4 inline mr-2" />
                 Confirm Password <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input
+                  id="register-confirm-password"
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={credentials.confirmPassword}
                   onChange={(e) => setCredentials({ ...credentials, confirmPassword: e.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-4 py-2.5 pr-12 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   placeholder="Confirm your password"
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
+                  aria-label={showConfirmPassword ? 'Hide password confirmation' : 'Show password confirmation'}
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                 >

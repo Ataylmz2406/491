@@ -5,16 +5,7 @@ import {
   deleteSecondOpinionPost,
   fetchSecondOpinionPosts,
 } from '../services/secondOpinionService';
-import { authMe } from '../services/authService';
 import { friendlyApiMessage } from '../services/apiErrorService';
-
-const DOCTOR_NAME_STORAGE_KEY = 'suderm_second_opinion_doctor_name';
-
-const normalizeName = (value) =>
-  (value || '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase();
 
 export default function SecondOpinionFeed({ language = 'en', doctorProfile, onViewHistory }) {
   const texts = {
@@ -63,36 +54,9 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
   const [error, setError] = useState('');
   const [postingCommentId, setPostingCommentId] = useState(null);
   const [deletingPostId, setDeletingPostId] = useState(null);
-  const [currentDoctorName, setCurrentDoctorName] = useState('');
   const [commentDrafts, setCommentDrafts] = useState({});
   const [commentAnonymous, setCommentAnonymous] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const resolveViewerName = async () => {
-      try {
-        const me = await authMe();
-        if (!cancelled) {
-          setCurrentDoctorName((me?.display_name || '').trim());
-        }
-        return;
-      } catch {
-        // Fallback for guest/no-token mode.
-      }
-
-      const savedName = window.localStorage.getItem(DOCTOR_NAME_STORAGE_KEY);
-      if (!cancelled) {
-        setCurrentDoctorName((savedName || doctorProfile?.name || '').trim());
-      }
-    };
-
-    void resolveViewerName();
-    return () => {
-      cancelled = true;
-    };
-  }, [doctorProfile?.name]);
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
@@ -201,10 +165,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
   };
 
   const canDeletePost = (post) => {
-    const postDoctor = normalizeName(post.doctorName);
-    const viewerDoctor = normalizeName(currentDoctorName);
-    if (!viewerDoctor) return false;
-    return postDoctor === viewerDoctor;
+    return Boolean(post.canDelete || post.raw?.can_delete);
   };
 
   const handleDeletePost = async (post) => {

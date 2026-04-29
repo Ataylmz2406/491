@@ -10,7 +10,10 @@ async function request(path, options = {}) {
       },
       ...options,
     });
-  } catch {
+  } catch (err) {
+    if (err?.message === 'AUTH_REQUIRED') {
+      throw err;
+    }
     throw new Error('We could not reach the server. Please check your connection and try again.');
   }
 
@@ -86,6 +89,7 @@ export function normalizeSecondOpinionPost(post) {
       author: comment.author_name || 'Anonymous Doctor',
     })),
     posted: post.status !== 'draft',
+    canDelete: Boolean(post.can_delete),
     raw: post,
   };
 }

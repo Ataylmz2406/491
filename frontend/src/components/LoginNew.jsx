@@ -1,15 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { authLogin } from '../services/authService';
 
-export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuestAccess, authMessage = '' }) {
-  const [userType, setUserType] = useState('doctor'); // 'doctor' | 'researcher' | 'personal'
+export default function Login({ initialUserType = 'doctor', onSuccess, onSwitchToRegister, onCancel, onGuestAccess, authMessage = '' }) {
+  const [userType, setUserType] = useState(initialUserType || 'doctor'); // 'doctor' | 'researcher' | 'personal'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+
+  useEffect(() => {
+    setUserType(initialUserType || 'doctor');
+  }, [initialUserType]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -74,8 +78,10 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
               { value: 'personal', label: '👤 Personal' },
             ].map((type) => (
               <button
+                type="button"
                 key={type.value}
                 onClick={() => setUserType(type.value)}
+                aria-pressed={userType === type.value}
                 className={`py-2 rounded-lg text-sm font-medium transition-all ${
                   userType === type.value
                     ? 'bg-brand-600 text-white shadow-md'
@@ -124,6 +130,7 @@ export default function Login({ onSuccess, onSwitchToRegister, onCancel, onGuest
                 />
                 <button
                   type="button"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                 >

@@ -756,18 +756,18 @@ function App() {
   // if landing page should be shown, render that instead of the app UI
   if (showLanding) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-gradient-to-br from-surface-darker via-surface-dark to-brand-900 text-white p-6">
-        <div className="flex items-center justify-center mb-6 animate-fade-in-up">
-          <img src="/logo.png" alt="SUDerm" className="h-[14rem] w-auto object-contain mix-blend-screen invert hue-rotate-180 brightness-110 contrast-125" />
+      <div className="flex min-h-svh flex-col items-center justify-start overflow-y-auto bg-gradient-to-br from-surface-darker via-surface-dark to-brand-900 px-4 py-8 text-white sm:justify-center sm:px-6 sm:py-10">
+        <div className="mb-4 flex items-center justify-center animate-fade-in-up sm:mb-6">
+          <img src="/logo.png" alt="SUDerm" className="h-28 w-auto object-contain mix-blend-screen invert hue-rotate-180 brightness-110 contrast-125 sm:h-40 lg:h-56" />
         </div>
-        <p className="text-xl text-slate-300 mb-2 font-medium animate-fade-in-up" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
+        <p className="mb-2 text-center text-lg font-medium text-slate-300 animate-fade-in-up sm:text-xl" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
           {t.landingSubtitle}
         </p>
-        <p className="text-base text-slate-400 mb-12 max-w-md text-center animate-fade-in-up" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
+        <p className="mb-8 max-w-md text-center text-sm text-slate-400 animate-fade-in-up sm:mb-10 sm:text-base" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
           {t.landingDescription}
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-4xl justify-center animate-fade-in-up" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
+        <div className="flex w-full max-w-4xl flex-col justify-center gap-3 animate-fade-in-up sm:flex-row sm:gap-4" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
           {[
             { label: t.forDoctors, type: 'doctor', desc: t.forDoctorsDesc },
             { label: t.forResearchers, type: 'researcher', desc: t.forResearchersDesc },
@@ -776,9 +776,9 @@ function App() {
             <button
               key={type}
               onClick={() => handleUserTypeChoice(type)}
-              className="group flex flex-col items-center text-center p-6 sm:px-8 sm:py-6 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl hover:bg-brand-500/20 hover:border-brand-400/40 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-brand-500 hover:scale-[1.03] hover:shadow-2xl flex-1 max-w-sm"
+              className="group flex w-full flex-col items-center rounded-2xl border border-white/10 bg-white/5 p-4 text-center backdrop-blur-md transition-all duration-300 hover:scale-[1.02] hover:border-brand-400/40 hover:bg-brand-500/20 hover:shadow-2xl focus:outline-none focus:ring-2 focus:ring-brand-500 sm:max-w-sm sm:flex-1 sm:px-6 sm:py-5"
             >
-              <span className="block text-xl font-semibold mb-2">{label}</span>
+              <span className="mb-2 block text-lg font-semibold sm:text-xl">{label}</span>
               <span className="block text-sm text-slate-400 group-hover:text-brand-300 transition-colors">
                 {desc}
               </span>
@@ -793,6 +793,7 @@ function App() {
   if (showLogin && userType) {
     return (
       <LoginNew
+        initialUserType={userType}
         onSuccess={handleLoginSuccess}
         onSwitchToRegister={handleSwitchToRegister}
         onCancel={handleAuthCancel}
@@ -954,7 +955,7 @@ function App() {
                   <option value="tr">{t.turkish}</option>
                 </select>
               </label>
-              {userType === 'doctor' && (
+              {loggedIn && userType === 'doctor' && (
                 <PatientLookup language={language} currentPatientId={patientId} />
               )}
               {/* tab switcher for doctors */}
@@ -1025,11 +1026,31 @@ function App() {
                 <option value="researcher">{t.forResearchers}</option>
                 <option value="personal">{t.personalUse}</option>
               </select>
+              {loggedIn && userType === 'doctor' && (
+                <div className="flex items-center gap-2 lg:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowMyAccount(true)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    <User className="h-4 w-4" />
+                    {t.myAccount}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    {t.signOut}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto pb-28 lg:pb-6">
+        <div className="flex-1 overflow-y-auto pb-6">
           {activeTab === 'analysis' ? (
             <div className="max-w-6xl mx-auto">
               <div className="p-4 sm:p-6">
@@ -1195,7 +1216,7 @@ function App() {
 
       {/* Doctor Action Buttons - Bottom Right */}
       {loggedIn && userType === 'doctor' && (
-        <div className="fixed bottom-4 right-4 z-40 flex flex-row gap-2 lg:bottom-6 lg:right-6 lg:flex-col">
+        <div className="fixed bottom-6 right-6 z-40 hidden flex-col gap-2 lg:flex">
           <button
             onClick={() => setShowMyAccount(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-md hover:shadow-lg"

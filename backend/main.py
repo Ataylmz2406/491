@@ -312,6 +312,7 @@ class SecondOpinionPostOut(BaseModel):
     skin_tone: str | None = None
     image_urls: list[str]
     comments: list[SecondOpinionCommentOut]
+    can_delete: bool = False
 
 
 SECOND_OPINION_ALLOWED_STATUSES = {"open", "resolved", "archived", "draft"}
@@ -537,6 +538,30 @@ def _verify_doctor_token(authorization: str) -> sqlite3.Row:
     return token_row
 
 
+def _get_user_profile(user_type: str, subject: str) -> dict:
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT display_name, email, full_name, phone_number, hospital, doctor_id
+            FROM users
+            WHERE subject = ? AND user_type = ?
+            """,
+            (subject, user_type),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=401, detail="User profile not found")
+        return dict(row)
+    finally:
+        conn.close()
+
+
+def _doctor_scope_values(token_row: sqlite3.Row) -> tuple[str, str]:
+    doctor_id = (token_row["subject"] or token_row["display_name"] or "").strip()
+    doctor_name = (token_row["display_name"] or "").strip()
+    return doctor_id, doctor_name
+
+
 def _verify_refresh_token(refresh_token: str | None) -> sqlite3.Row:
     if not refresh_token:
         raise HTTPException(status_code=401, detail="Missing refresh token")
@@ -706,7 +731,11 @@ def _get_post_or_404(conn: sqlite3.Connection, post_id: int) -> sqlite3.Row:
     return post_row
 
 
-def _build_post_payload(conn: sqlite3.Connection, post_row: sqlite3.Row) -> dict:
+def _build_post_payload(
+    conn: sqlite3.Connection,
+    post_row: sqlite3.Row,
+    requester_identity: str | None = None,
+) -> dict:
     post_id = post_row["id"]
     image_rows = conn.execute(
         """
@@ -729,6 +758,8 @@ def _build_post_payload(conn: sqlite3.Connection, post_row: sqlite3.Row) -> dict
     ).fetchall()
 
     is_anonymous = bool(post_row["is_anonymous"])
+    owner_identity = (post_row["created_by_identity"] or "").strip().lower()
+    viewer_identity = (requester_identity or "").strip().lower()
     return {
         "id": post_id,
         "created_at": post_row["created_at"],
@@ -747,6 +778,7 @@ def _build_post_payload(conn: sqlite3.Connection, post_row: sqlite3.Row) -> dict
         "skin_tone": post_row["skin_tone"],
         "image_urls": [r["image_url"] for r in image_rows],
         "comments": [_serialize_comment(r) for r in comment_rows],
+        "can_delete": bool(viewer_identity and owner_identity == viewer_identity),
     }
 
 
@@ -1648,22 +1680,34 @@ def auth_refresh(
 ):
     token_row = _verify_refresh_token(refresh_token)
     _revoke_raw_token(refresh_token, "refresh")
+    profile = _get_user_profile(token_row["user_type"], token_row["subject"])
 
     return _issue_auth_session(
         response=response,
         user_type=token_row["user_type"],
         subject=token_row["subject"],
-        display_name=token_row["display_name"],
+        display_name=profile["display_name"],
+        email=profile["email"],
+        full_name=profile["full_name"],
+        phone_number=profile["phone_number"],
+        hospital=profile["hospital"],
+        doctor_id=profile["doctor_id"],
     )
 
 
 @app.get("/auth/me", response_model=AuthMeResponse)
 def auth_me(authorization: str = Header(default="")):
     token_row = _verify_auth_token(authorization)
+    profile = _get_user_profile(token_row["user_type"], token_row["subject"])
     return AuthMeResponse(
         user_type=token_row["user_type"],
-        display_name=token_row["display_name"],
+        display_name=profile["display_name"],
         expires_at=token_row["expires_at"],
+        email=profile["email"],
+        full_name=profile["full_name"],
+        phone_number=profile["phone_number"],
+        hospital=profile["hospital"],
+        doctor_id=profile["doctor_id"],
     )
 
 
@@ -1815,7 +1859,9 @@ def get_doctor_analyses(authorization: str = Header(default="")):
 
 
 @app.get("/history", response_model=list[DiagnosisOut])
-def get_history(patient_id: str | None = None):
+def get_history(patient_id: str | None = None, authorization: str = Header(default="")):
+    token_row = _verify_doctor_token(authorization)
+    doctor_id, doctor_name = _doctor_scope_values(token_row)
     conn = get_db_connection()
     try:
         if patient_id:
@@ -1825,9 +1871,10 @@ def get_history(patient_id: str | None = None):
                        patient_id, age_group, sex, skin_tone
                 FROM diagnoses
                 WHERE patient_id = ?
+                  AND (doctor_id = ? OR doctor_name = ?)
                 ORDER BY datetime(date) DESC, id DESC
                 """,
-                (patient_id,),
+                (patient_id, doctor_id, doctor_name),
             ).fetchall()
         else:
             rows = conn.execute(
@@ -1835,8 +1882,10 @@ def get_history(patient_id: str | None = None):
                 SELECT id, date, diagnosis, confidence, location, status,
                        patient_id, age_group, sex, skin_tone
                 FROM diagnoses
+                WHERE doctor_id = ? OR doctor_name = ?
                 ORDER BY datetime(date) DESC, id DESC
-                """
+                """,
+                (doctor_id, doctor_name),
             ).fetchall()
         return [dict(row) for row in rows]
     finally:
@@ -1844,16 +1893,20 @@ def get_history(patient_id: str | None = None):
 
 
 @app.post("/history", response_model=DiagnosisOut)
-def create_history_item(payload: DiagnosisIn):
+def create_history_item(payload: DiagnosisIn, authorization: str = Header(default="")):
+    token_row = _verify_doctor_token(authorization)
+    doctor_id, doctor_name = _doctor_scope_values(token_row)
     conn = get_db_connection()
     try:
+        now = utc_now_iso()
         cursor = conn.execute(
             """
             INSERT INTO diagnoses (
                 date, diagnosis, confidence, location, status,
-                patient_id, age_group, sex, skin_tone
+                patient_id, age_group, sex, skin_tone, doctor_id, doctor_name,
+                prediction, confidence_score, created_at, lesion_location
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload.date,
@@ -1865,6 +1918,12 @@ def create_history_item(payload: DiagnosisIn):
                 payload.age_group,
                 payload.sex,
                 payload.skin_tone,
+                doctor_id,
+                doctor_name,
+                payload.diagnosis,
+                payload.confidence,
+                now,
+                payload.location,
             ),
         )
         conn.commit()
@@ -1883,10 +1942,18 @@ def create_history_item(payload: DiagnosisIn):
 
 
 @app.delete("/history/{diagnosis_id}")
-def delete_history_item(diagnosis_id: int):
+def delete_history_item(diagnosis_id: int, authorization: str = Header(default="")):
+    token_row = _verify_doctor_token(authorization)
+    doctor_id, doctor_name = _doctor_scope_values(token_row)
     conn = get_db_connection()
     try:
-        cursor = conn.execute("DELETE FROM diagnoses WHERE id = ?", (diagnosis_id,))
+        cursor = conn.execute(
+            """
+            DELETE FROM diagnoses
+            WHERE id = ? AND (doctor_id = ? OR doctor_name = ?)
+            """,
+            (diagnosis_id, doctor_id, doctor_name),
+        )
         conn.commit()
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Diagnosis not found")
@@ -1896,10 +1963,18 @@ def delete_history_item(diagnosis_id: int):
 
 
 @app.delete("/history")
-def delete_all_history():
+def delete_all_history(authorization: str = Header(default="")):
+    token_row = _verify_doctor_token(authorization)
+    doctor_id, doctor_name = _doctor_scope_values(token_row)
     conn = get_db_connection()
     try:
-        conn.execute("DELETE FROM diagnoses")
+        conn.execute(
+            """
+            DELETE FROM diagnoses
+            WHERE doctor_id = ? OR doctor_name = ?
+            """,
+            (doctor_id, doctor_name),
+        )
         conn.commit()
         return {"ok": True}
     finally:
@@ -1913,7 +1988,10 @@ def list_second_opinion_posts(
     patient_id: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    authorization: str = Header(default=""),
 ):
+    token_row = _verify_doctor_token(authorization)
+    requester_identity = _build_requester_identity(token_row)
     conn = get_db_connection()
     try:
         where_clauses = []
@@ -1937,7 +2015,7 @@ def list_second_opinion_posts(
         rows = conn.execute(
             f"""
             SELECT id, created_at, updated_at, status, is_anonymous,
-                   doctor_name, doctor_affiliation, patient_id, current_hypothesis,
+                   created_by_identity, doctor_name, doctor_affiliation, patient_id, current_hypothesis,
                    question_text, lesion_location, diagnosis, age_group, sex, skin_tone
             FROM second_opinion_posts
             {where_sql}
@@ -1947,17 +2025,19 @@ def list_second_opinion_posts(
             (*params, limit, offset),
         ).fetchall()
 
-        return [_build_post_payload(conn, row) for row in rows]
+        return [_build_post_payload(conn, row, requester_identity) for row in rows]
     finally:
         conn.close()
 
 
 @app.get("/second-opinion/posts/{post_id}", response_model=SecondOpinionPostOut)
-def get_second_opinion_post(post_id: int):
+def get_second_opinion_post(post_id: int, authorization: str = Header(default="")):
+    token_row = _verify_doctor_token(authorization)
+    requester_identity = _build_requester_identity(token_row)
     conn = get_db_connection()
     try:
         post_row = _get_post_or_404(conn, post_id)
-        return _build_post_payload(conn, post_row)
+        return _build_post_payload(conn, post_row, requester_identity)
     finally:
         conn.close()
 
@@ -1986,6 +2066,8 @@ def create_second_opinion_post(
         )
 
     cleaned_image_urls = _validate_second_opinion_image_urls(payload.image_urls)
+    if not cleaned_image_urls:
+        raise HTTPException(status_code=400, detail="At least one image is required")
 
     status_value = "open"
 
@@ -2035,7 +2117,7 @@ def create_second_opinion_post(
 
         conn.commit()
         post_row = _get_post_or_404(conn, post_id)
-        return _build_post_payload(conn, post_row)
+        return _build_post_payload(conn, post_row, requester_identity)
     finally:
         conn.close()
 
@@ -2151,7 +2233,7 @@ def update_second_opinion_post(
         conn.commit()
 
         refreshed = _get_post_or_404(conn, post_id)
-        return _build_post_payload(conn, refreshed)
+        return _build_post_payload(conn, refreshed, requester_identity)
     finally:
         conn.close()
 
