@@ -6,6 +6,7 @@ torchvision
 numpy
 pillow
 timm
+transformers
 pandas
 scikit-learn
 tqdm

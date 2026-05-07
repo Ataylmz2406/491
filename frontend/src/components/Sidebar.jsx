@@ -14,7 +14,7 @@ export default function Sidebar({
 }) {
     const translations = {
       en: {
-        subtitle: 'Professional AI Diagnostics',
+        subtitle: 'Professional AI Analysis',
         lesionContext: 'Lesion Context',
         lesionLocation: 'Lesion Location',
         selectSite: 'Select Site...',
@@ -45,7 +45,7 @@ export default function Sidebar({
         ]
       },
       tr: {
-        subtitle: 'Profesyonel AI Teşhisi',
+        subtitle: 'Profesyonel AI Analizi',
         lesionContext: 'Lezyon Bağlamı',
         lesionLocation: 'Lezyon Konumu',
         selectSite: 'Alan Seçin...',

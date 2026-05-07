@@ -13,10 +13,10 @@ export default function ConfidenceVisualization({ confidence, language = 'en' })
       moderate: 'MODERATE',
       low: 'LOW',
       veryHigh: 'VERY HIGH',
-      recommendation_high: 'Trust AI prediction. Strong match.',
+      recommendation_high: 'Strong model match. Review clinically before acting.',
       recommendation_moderate: 'Review differential diagnoses carefully.',
       recommendation_low: 'Recommend second opinion or biopsy.',
-      recommendation_very_high: 'Very strong match. Safe to proceed.',
+      recommendation_very_high: 'Very strong model match. Confirm clinically before acting.',
       similar: 'Similar Cases',
       cases: 'cases',
       matchStrength: 'Match Strength',
@@ -27,10 +27,10 @@ export default function ConfidenceVisualization({ confidence, language = 'en' })
       moderate: 'ORTA',
       low: 'DÜŞÜK',
       veryHigh: 'ÇOK YÜKSEK',
-      recommendation_high: 'AI tahmininden emin olun. Güçlü bir eşleşme.',
+      recommendation_high: 'Güçlü model eşleşmesi. İşlemden önce klinik olarak gözden geçirin.',
       recommendation_moderate: 'Farklı teşhisleri dikkatle gözden geçirin.',
       recommendation_low: 'İkinci görüş veya biyopsi önerilir.',
-      recommendation_very_high: 'Çok güçlü bir eşleşme. İleriye gitmesi güvenli.',
+      recommendation_very_high: 'Çok güçlü model eşleşmesi. İşlemden önce klinik olarak doğrulayın.',
       similar: 'Benzer Vakalar',
       cases: 'vaka',
       matchStrength: 'Eşleşme Gücü',
@@ -153,7 +153,7 @@ export default function ConfidenceVisualization({ confidence, language = 'en' })
 
       {/* Thresholds explanation */}
       <div className="text-xs text-gray-600 space-y-1 pt-2 border-t border-gray-300">
-        <p><span className="font-semibold">90%+:</span> Very high confidence - safe to diagnose</p>
+        <p><span className="font-semibold">90%+:</span> Very high confidence - clinically verify before acting</p>
         <p><span className="font-semibold">80-89%:</span> High confidence - verify differential</p>
         <p><span className="font-semibold">60-79%:</span> Moderate - review differential carefully</p>
         <p><span className="font-semibold">&lt;60%:</span> Low confidence - seek second opinion</p>

@@ -1,6 +1,6 @@
 # SUDerm - Skin Lesion Analysis
 
-A dual-branch hierarchical AI application for professional skin lesion analysis.
+A SwinV2-based AI application for professional skin lesion analysis.
 
 ## Prerequisites
 
@@ -11,19 +11,19 @@ Python 3.10+ is required because the backend uses modern Python type syntax. Nod
 
 ## Important: Model Weights
 
-Due to their size, the model weights (`Weights_DualEffV2_Funnel_20251129_1830.pth`) are not included in this repository.
+Due to their size, the model weights (`MILK10k_SwinV2_ISICinit_fold4_best.pth`) are not included in this repository.
 
-To run predictions, obtain `Weights_DualEffV2_Funnel_20251129_1830.pth` and place it directly inside the `backend` folder:
+To run predictions, obtain `MILK10k_SwinV2_ISICinit_fold4_best.pth` and place it directly inside the project root:
 
 ```text
 ENS491/
+├── MILK10k_SwinV2_ISICinit_fold4_best.pth  <-- PLACE FILE HERE
 ├── backend/
-│   ├── Weights_DualEffV2_Funnel_20251129_1830.pth  <-- PLACE FILE HERE
 │   ├── main.py
 │   └── ...
 ```
 
-The backend should be started from inside the `backend` folder, as the model path is resolved relative to that working directory. The provided run scripts already do this.
+The backend resolves the model path from the project root. The provided run scripts already start the backend from the expected location.
 
 ## Running the Application
 
@@ -82,18 +82,3 @@ The backend supports these optional environment variables:
 - `SUDERM_ACCESS_TOKEN_TTL_MINUTES`: access-token lifetime. Default: `15`
 - `SUDERM_REFRESH_TOKEN_TTL_DAYS`: refresh-token cookie lifetime. Default: `7`
 - `SUDERM_SECURE_COOKIES`: set to `true` when serving over HTTPS.
-
-## Load Testing
-
-A lightweight `/predict` load-test helper is available:
-
-```bash
-python3 backend/load_tests/predict_load_test.py \
-  --url http://127.0.0.1:8000/predict \
-  --image "path/to/test-image.jpg" \
-  --requests 50 \
-  --concurrency 10 \
-  --images-per-request 4
-```
-
-Use `--server-pid` to sample backend memory usage during the run.

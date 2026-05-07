@@ -1,7 +1,17 @@
-*.pth
-__pycache__/
 backend/venv/
 backend/static/
 node_modules/
 .DS_Store
 backend/suderm.db
+
+# Research & Validation
+data/
+validation_outputs/
+*.pth
+*.csv
+*.pth.tar
+*.pkl
+
+# Python temporary
+__pycache__/
+*.py[cod]

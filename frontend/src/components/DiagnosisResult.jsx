@@ -5,10 +5,12 @@ import { PDFExportService } from '../services/pdfExportService';
 export default function DiagnosisResult({ language = 'en', result, location, userType, loading, showToast, patientId, dermPreviews = [], clinPreview = null }) {
     const texts = {
       en: {
-        title: 'Diagnosis Result',
-        noResult: userType === 'personal' ? 'No result yet. Upload images to analyze my skin in personal use.' : 'No result yet. Upload images and run diagnosis.',
-        aiPrediction: 'AI Prediction',
+        title: 'Analysis Result',
+        noResult: userType === 'personal' ? 'No result yet. Upload images to analyze my skin in personal use.' : 'No result yet. Upload images and run analysis.',
+        aiPrediction: 'AI Assessment',
         confidence: 'Confidence',
+        deploymentStatus: 'Deployment Status',
+        uncertainNotice: 'Uncertain or review-required output. Treat as non-diagnostic and review clinically.',
         topDifferential: 'Top Differential Class',
         allClassPredictions: 'Other Class Predictions',
         malignant: 'Malignant',
@@ -24,10 +26,12 @@ export default function DiagnosisResult({ language = 'en', result, location, use
         pdfError: 'Error exporting PDF'
       },
       tr: {
-        title: 'Teşhis Sonucu',
-        noResult: userType === 'personal' ? 'Sonuç yok. Bireysel kullanımda cildimi analiz etmek için görüntü yükleyin.' : 'Henüz sonuç yok. Görüntü yükleyin ve teşhis çalıştırın.',
-        aiPrediction: 'Yapay Zeka Tahmini',
+        title: 'Analiz Sonucu',
+        noResult: userType === 'personal' ? 'Sonuç yok. Bireysel kullanımda cildimi analiz etmek için görüntü yükleyin.' : 'Henüz sonuç yok. Görüntü yükleyin ve analiz çalıştırın.',
+        aiPrediction: 'Yapay Zeka Değerlendirmesi',
         confidence: 'Güven',
+        deploymentStatus: 'Dağıtım Durumu',
+        uncertainNotice: 'Belirsiz veya inceleme gerektiren çıktı. Tanısal kabul etmeyin ve klinik olarak gözden geçirin.',
         topDifferential: 'En İyi Farklılaşım Sınıfı',
         allClassPredictions: 'Diğer Sınıf Tahminleri',
         malignant: 'Kötü Huylu',
@@ -69,7 +73,8 @@ SUDerm CLINICAL REPORT - SABANCI UNIVERSITY
 -------------------------------------------
 LOCATION: ${location || "Unspecified"}
 IMAGE STATUS: ${result.metadata?.zoom_check && result.metadata.zoom_check !== 'OK' && result.metadata.zoom_check !== 'N/A' ? "Warning: Low Res/Square" : "Validated"}
-AI ASSESSMENT: ${result.prediction} (${result.confidence_score.toFixed(1)}% Confidence)
+        AI ASSESSMENT: ${result.prediction} (${result.confidence_score.toFixed(1)}% Confidence)
+        DEPLOYMENT STATUS: ${result.confidence_status || result.deployment_status || "Not provided"}
 TOP DIFFERENTIAL: ${result.details?.top_class}
 XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
     `.trim();
@@ -114,6 +119,9 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
     };
 
     const getResultColor = (pred) => {
+        if (['uncertain', 'low_confidence', 'review_required'].includes(result?.deployment_status)) {
+            return 'text-amber-800 bg-amber-50 border-amber-200';
+        }
         if (pred?.toLowerCase().includes('malignant') || pred?.toLowerCase().includes('risk')) {
             return 'text-red-700 bg-red-50 border-red-200';
         }
@@ -152,7 +160,9 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                     <div aria-live="polite">
                         {/* AI Prediction Section */}
                         <div className={`mb-3 flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center ${getResultColor(result.prediction)}`}>
-                            {result.prediction.toLowerCase().includes('malignant')
+                            {['uncertain', 'low_confidence', 'review_required'].includes(result.deployment_status)
+                                ? <AlertCircle className="shrink-0 w-12 h-12" />
+                                : result.prediction.toLowerCase().includes('malignant')
                                 ? <AlertCircle className="shrink-0 w-12 h-12" />
                                 : <CheckCircle className="shrink-0 w-12 h-12" />
                             }
@@ -165,6 +175,13 @@ XAI HEATMAP: ${result.grad_cam_url || "Not generated"}
                                 <div className="text-base font-bold text-gray-800">{result.confidence_score.toFixed(1)}%</div>
                             </div>
                         </div>
+
+                        {['uncertain', 'low_confidence', 'review_required'].includes(result.deployment_status) && (
+                            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                                <div className="font-bold uppercase opacity-70">{t.deploymentStatus}: {result.confidence_status || result.deployment_status}</div>
+                                <div>{t.uncertainNotice}</div>
+                            </div>
+                        )}
 
                         {/* Top Differential Class Section */}
                         <div className="mb-3 flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:gap-4">

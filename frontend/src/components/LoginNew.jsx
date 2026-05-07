@@ -100,12 +100,13 @@ export default function Login({ initialUserType = 'doctor', onSuccess, onSwitchT
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                 Email Address
               </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
+	              <input
+	                id="email"
+	                type="text"
+	                inputMode="email"
+	                value={email}
+	                onChange={(e) => setEmail(e.target.value)}
+	                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
                 placeholder="you@example.com"
                 autoComplete="email"
               />

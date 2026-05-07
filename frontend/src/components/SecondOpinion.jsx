@@ -23,6 +23,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       doctorName: 'Doctor Name',
       affiliation: 'Affiliation',
       patientId: 'Patient ID',
+      optional: 'Optional',
       currentHypothesis: 'AI prediction',
       uploadImages: 'Upload images',
       chooseImages: 'Choose images',
@@ -41,9 +42,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       errorPrefix: 'Could not save second opinion:',
       removeImage: 'Remove image',
       addImageFirst: 'Please add at least one image.',
-      patientRequired: 'Patient ID is required before posting.',
       hypothesisRequired: 'AI prediction is required before posting.',
-      missingPatient: 'Patient ID',
       missingHypothesis: 'AI prediction',
       missingImages: 'at least one image',
       completeRequired: 'Complete required fields:',
@@ -55,6 +54,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       doctorName: 'Doktor Adı',
       affiliation: 'Kurum',
       patientId: 'Hasta ID',
+      optional: 'Opsiyonel',
       currentHypothesis: 'Yapay Zeka Tahmini',
       uploadImages: 'Görüntü yükle',
       chooseImages: 'Görüntüleri seç',
@@ -73,9 +73,7 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
       errorPrefix: 'İkinci görüş kaydedilemedi:',
       removeImage: 'Görüntüyü kaldır',
       addImageFirst: 'Lütfen en az bir görüntü ekleyin.',
-      patientRequired: 'Göndermeden önce hasta ID gerekli.',
       hypothesisRequired: 'Göndermeden önce yapay zeka tahmini gerekli.',
-      missingPatient: 'Hasta ID',
       missingHypothesis: 'Yapay zeka tahmini',
       missingImages: 'en az bir görüntü',
       completeRequired: 'Zorunlu alanları tamamlayın:',
@@ -253,11 +251,6 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
   };
 
   const postOpinion = async () => {
-    if (!patientId.trim()) {
-      setError(t.patientRequired);
-      return;
-    }
-
     if (draft.uploads.length === 0) {
       setError(t.addImageFirst);
       return;
@@ -348,9 +341,8 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
   };
 
   const captionCount = draft.caption.length;
-  const canPost = patientId.trim() && currentHypothesis.trim() && draft.uploads.length > 0 && !posting;
+  const canPost = currentHypothesis.trim() && draft.uploads.length > 0 && !posting;
   const missingPostRequirements = [
-    !patientId.trim() && t.missingPatient,
     !currentHypothesis.trim() && t.missingHypothesis,
     draft.uploads.length === 0 && t.missingImages,
   ].filter(Boolean);
@@ -394,7 +386,10 @@ export default function SecondOpinion({ language = 'en', onViewHistory, question
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">{t.patientId} <span className="text-red-500">*</span></label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {t.patientId}
+            <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">{t.optional}</span>
+          </label>
           <input
             type="text"
             value={patientId}

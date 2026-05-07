@@ -87,6 +87,7 @@ export function normalizeSecondOpinionPost(post) {
       id: comment.id,
       text: comment.comment_text,
       author: comment.author_name || 'Anonymous Doctor',
+      canDelete: Boolean(comment.can_delete),
     })),
     posted: post.status !== 'draft',
     canDelete: Boolean(post.can_delete),
@@ -110,6 +111,12 @@ export async function createSecondOpinionComment(postId, payload) {
   return request(`/second-opinion/posts/${postId}/comments`, {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteSecondOpinionComment(postId, commentId) {
+  return request(`/second-opinion/posts/${postId}/comments/${commentId}`, {
+    method: 'DELETE',
   });
 }
 

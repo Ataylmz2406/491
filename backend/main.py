@@ -12,7 +12,6 @@ import re
 from datetime import datetime, timezone, timedelta
 import torch
 import numpy as np
-import torch.nn.functional as F
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query, Header, Request, Response, Cookie
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -21,19 +20,27 @@ from pydantic import BaseModel, Field
 from PIL import Image, UnidentifiedImageError
 from contextlib import asynccontextmanager
 from model_utils import (
-    DualHierarchicalModel, 
+    build_swinv2_model_from_checkpoint,
+    validate_checkpoint_class_order,
     get_inference_transform, 
-    stitch_predictions, 
+    compute_prediction_status,
+    assess_dermoscopic_image_plausibility,
+    MALIGNANT_CLASSES,
     CLASS_NAMES, 
     IMG_SIZE,
     encode_location,
     IMAGENET_MEAN,
-    IMAGENET_STD
+    IMAGENET_STD,
+    MODEL_ARCHITECTURE,
+    MODEL_CHECKPOINT_NAME,
+    MODEL_DISPLAY_NAME,
+    MODEL_INPUT_MODALITY,
+    MODEL_TRANSFER_SOURCE,
 )
 
 # --- CONFIGURATION ---
-MODEL_WEIGHTS = "Weights_DualEffV2_Funnel_20251129_1830.pth"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_WEIGHTS = os.path.abspath(os.path.join(BASE_DIR, "..", MODEL_CHECKPOINT_NAME))
 DB_PATH = os.path.join(BASE_DIR, "suderm.db")
 logger = logging.getLogger("suderm")
 
@@ -292,6 +299,7 @@ class SecondOpinionCommentOut(BaseModel):
     is_anonymous: bool
     author_name: str
     comment_text: str
+    can_delete: bool = False
 
 
 class SecondOpinionPostOut(BaseModel):
@@ -703,8 +711,10 @@ def _public_doctor_name(raw_name: str | None, is_anonymous: bool) -> str:
     return "Doctor"
 
 
-def _serialize_comment(row: sqlite3.Row) -> dict:
+def _serialize_comment(row: sqlite3.Row, requester_identity: str | None = None) -> dict:
     is_anonymous = bool(row["is_anonymous"])
+    owner_identity = (row["created_by_identity"] or "").strip().lower()
+    viewer_identity = (requester_identity or "").strip().lower()
     return {
         "id": row["id"],
         "post_id": row["post_id"],
@@ -712,6 +722,7 @@ def _serialize_comment(row: sqlite3.Row) -> dict:
         "is_anonymous": is_anonymous,
         "author_name": _public_doctor_name(row["author_name"], is_anonymous),
         "comment_text": row["comment_text"],
+        "can_delete": bool(viewer_identity and owner_identity == viewer_identity),
     }
 
 
@@ -749,7 +760,7 @@ def _build_post_payload(
 
     comment_rows = conn.execute(
         """
-        SELECT id, post_id, created_at, is_anonymous, author_name, comment_text
+        SELECT id, post_id, created_at, is_anonymous, created_by_identity, author_name, comment_text
         FROM second_opinion_comments
         WHERE post_id = ?
         ORDER BY datetime(created_at) ASC, id ASC
@@ -777,7 +788,7 @@ def _build_post_payload(
         "sex": post_row["sex"],
         "skin_tone": post_row["skin_tone"],
         "image_urls": [r["image_url"] for r in image_rows],
-        "comments": [_serialize_comment(r) for r in comment_rows],
+        "comments": [_serialize_comment(r, requester_identity) for r in comment_rows],
         "can_delete": bool(viewer_identity and owner_identity == viewer_identity),
     }
 
@@ -1317,27 +1328,31 @@ async def lifespan(app: FastAPI):
     ensure_mil10k_labels_schema()
     ensure_second_opinion_strict_constraints()
     
-    # 2. Initialize Model
-    logger.info("Initializing model on %s", DEVICE)
-    model = DualHierarchicalModel(arch='tf_efficientnetv2_xl.in21k_ft_in1k', emb_dim=512, dropout=0.2)
-    
-    # 3. Load Weights
+    # 2. Load SwinV2 checkpoint and initialize model
+    logger.info("Initializing %s model on %s", MODEL_DISPLAY_NAME, DEVICE)
     if os.path.exists(MODEL_WEIGHTS):
         logger.info("Loading weights from %s", MODEL_WEIGHTS)
         try:
-            state_dict = torch.load(MODEL_WEIGHTS, map_location=DEVICE)
-            model.load_state_dict(state_dict, strict=False) 
-            logger.info("Weights loaded successfully.")
+            checkpoint = torch.load(MODEL_WEIGHTS, map_location="cpu", weights_only=False)
+            validate_checkpoint_class_order(checkpoint)
+            model = build_swinv2_model_from_checkpoint(checkpoint)
+            logger.info(
+                "Loaded %s checkpoint: fold=%s, image_size=%s, classes=%s",
+                MODEL_ARCHITECTURE,
+                checkpoint.get("fold", "unknown"),
+                checkpoint.get("image_size", IMG_SIZE),
+                checkpoint.get("classes", []),
+            )
         except Exception as e:
             logger.error("Error loading weights: %s", e)
-            logger.warning("Server starting with random weights.")
+            raise RuntimeError(f"Could not initialize {MODEL_DISPLAY_NAME}") from e
     else:
-        logger.warning("Weights file %s not found. Server starting with random weights.", MODEL_WEIGHTS)
+        raise RuntimeError(f"Model weights file not found: {MODEL_WEIGHTS}")
     
     model.to(DEVICE)
     model.eval()
     
-    # 4. Initialize Transform
+    # 3. Initialize Transform
     transform = get_inference_transform(IMG_SIZE)
     
     yield
@@ -1386,9 +1401,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# --- UTILITY: MALIGNANCY CHECK ---
-MALIGNANT_CLASSES = {'MEL', 'BCC', 'SCCKA', 'AKIEC', 'MAL_OTH'}
 
 def interpret_prediction(probs):
     """
@@ -1462,7 +1474,7 @@ def _zero_clinical_tensor():
 
 @app.get("/")
 def read_root():
-    return {"message": "SUDerm - Dual-Branch Skin Lesion Analysis API (Sabanci University)"}
+    return {"message": "SUDerm - MILK10k SwinV2 Skin Lesion Analysis API (Sabanci University)"}
 
 
 def _hash_password(password: str) -> str:
@@ -1748,8 +1760,6 @@ def save_doctor_analysis(
     clean_lesion_location = _clean_optional_text(lesion_location, 120)
 
     missing_fields = []
-    if not clean_patient_id:
-        missing_fields.append("patient_id")
     if not clean_prediction:
         missing_fields.append("prediction")
     if confidence_score is None:
@@ -2171,13 +2181,62 @@ def create_second_opinion_comment(
         conn.commit()
         row = conn.execute(
             """
-            SELECT id, post_id, created_at, is_anonymous, author_name, comment_text
+            SELECT id, post_id, created_at, is_anonymous, created_by_identity, author_name, comment_text
             FROM second_opinion_comments
             WHERE id = ?
             """,
             (cursor.lastrowid,),
         ).fetchone()
-        return _serialize_comment(row)
+        return _serialize_comment(row, requester_identity)
+    finally:
+        conn.close()
+
+
+@app.delete("/second-opinion/posts/{post_id}/comments/{comment_id}")
+def delete_second_opinion_comment(
+    post_id: int,
+    comment_id: int,
+    authorization: str = Header(default=""),
+):
+    token_row = _verify_doctor_token(authorization)
+    requester_identity = _build_requester_identity(token_row).strip().lower()
+
+    conn = get_db_connection()
+    try:
+        _get_post_or_404(conn, post_id)
+        comment_row = conn.execute(
+            """
+            SELECT id, post_id, created_by_identity
+            FROM second_opinion_comments
+            WHERE id = ? AND post_id = ?
+            """,
+            (comment_id, post_id),
+        ).fetchone()
+
+        if not comment_row:
+            raise HTTPException(status_code=404, detail="Second opinion comment not found")
+
+        owner_identity = (comment_row["created_by_identity"] or "").strip().lower()
+        if not owner_identity or owner_identity != requester_identity:
+            raise HTTPException(status_code=403, detail="You can only delete your own comments")
+
+        cursor = conn.execute(
+            "DELETE FROM second_opinion_comments WHERE id = ? AND post_id = ?",
+            (comment_id, post_id),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Second opinion comment not found")
+
+        conn.execute(
+            """
+            UPDATE second_opinion_posts
+            SET updated_at = ?
+            WHERE id = ?
+            """,
+            (utc_now_iso(), post_id),
+        )
+        conn.commit()
+        return {"ok": True}
     finally:
         conn.close()
 
@@ -2291,44 +2350,74 @@ async def predict(
             raise HTTPException(status_code=400, detail="At least one dermoscopic image is required")
 
         logger.info("Analysis request received with %s dermoscopic image(s)", len(dermoscopic_images))
+        image_assessments = [
+            assess_dermoscopic_image_plausibility(derm_img)
+            for derm_img in dermoscopic_images
+        ]
         
         zoom_warning = "N/A"
         if clinical_image:
             clin_img = await _read_prediction_image(clinical_image, "Clinical image")
             zoom_warning = check_zoom_level(clin_img)
-            clin_tensor = transform(clin_img).unsqueeze(0).to(DEVICE)
-        else:
-            clin_tensor = _zero_clinical_tensor()
 
         prediction_tensors = []
         with torch.no_grad():
             for derm_img in dermoscopic_images:
                 derm_tensor = transform(derm_img).unsqueeze(0).to(DEVICE)
-                l_grp, l_mel, l_oth = model(clin_tensor, derm_tensor)
-                prediction_tensors.append(stitch_predictions(l_grp, l_mel, l_oth))
+                logits = model(derm_tensor)
+                prediction_tensors.append(torch.softmax(logits, dim=1))
                 del derm_tensor
         
         probs = torch.stack(prediction_tensors, dim=0).mean(dim=0)
         probs_np = probs[0].cpu().numpy()
             
         pred_label, conf_score = interpret_prediction(probs)
+        review_assessments = [item for item in image_assessments if item["status"] != "plausible"]
+        deployment_status = compute_prediction_status(
+            probs_np,
+            image_assessment=review_assessments[0] if review_assessments else None,
+        )
 
-        del clin_tensor
         if DEVICE.type == 'mps':
             torch.mps.empty_cache()
 
         return {
             "prediction": pred_label,
             "confidence_score": float(conf_score),
+            "predicted_class": CLASS_NAMES[probs.argmax().item()],
+            "risk_category": pred_label,
+            "deployment_status": deployment_status["status"],
+            "confidence_status": deployment_status["display"],
+            "model": {
+                "architecture": MODEL_ARCHITECTURE,
+                "name": MODEL_DISPLAY_NAME,
+                "checkpoint": MODEL_CHECKPOINT_NAME,
+                "transfer_source": MODEL_TRANSFER_SOURCE,
+                "input_modality": MODEL_INPUT_MODALITY,
+                "image_size": IMG_SIZE,
+                "class_order": CLASS_NAMES,
+                "preprocessing": {
+                    "resize": f"{IMG_SIZE}x{IMG_SIZE}",
+                    "interpolation": "bicubic",
+                    "crop": "none",
+                    "normalization_mean": IMAGENET_MEAN,
+                    "normalization_std": IMAGENET_STD,
+                },
+            },
             "metadata": {
                 "location": lesion_location,
                 "diagnosis_gt": diagnosis,
                 "location_vector": location_vec_list,
-                "zoom_check": zoom_warning
+                "zoom_check": zoom_warning,
+                "dermoscopic_image_count": len(dermoscopic_images),
+                "clinical_image_received": clinical_image is not None,
+                "clinical_image_used_for_inference": False,
+                "dermoscopic_image_assessments": image_assessments,
             },
             "details": {
                 "top_class": CLASS_NAMES[probs.argmax().item()],
                 "top_prob": float(probs.max().item() * 100),
+                "deployment_status": deployment_status,
                 "all_predictions": [
                     {"class": name, "prob": float(prob * 100)}
                     for name, prob in zip(CLASS_NAMES, probs_np)

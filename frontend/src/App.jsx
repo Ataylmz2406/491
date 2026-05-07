@@ -113,8 +113,8 @@ function App() {
 
   const translations = {
     en: {
-      landingSubtitle: 'Professional AI Skin Diagnostics',
-      landingDescription: 'Upload dermoscopic imagery for instant, AI-powered lesion classification powered by Dual-Branch EfficientNetV2.',
+      landingSubtitle: 'Professional AI Skin Analysis',
+      landingDescription: 'Upload dermoscopic imagery for instant, AI-powered lesion classification powered by MILK10k SwinV2.',
       forDoctors: 'For Doctors',
       forResearchers: 'For Researchers',
       personalUse: 'Personal Use',
@@ -129,12 +129,13 @@ function App() {
       patientHistory: 'Patient History',
       historyMetadata: 'History / Metadata',
       checkImages: 'Ensure images are high-resolution and focused.',
-      consultProfessional: 'Please consult a medical professional after use.',
+      consultProfessional: 'This AI output is not a definitive diagnosis. Please consult a qualified medical professional.',
+      privacyNotice: 'KVKK/privacy notice: upload only authorized clinical images and avoid unnecessary personal data.',
       processing: 'Processing...',
-      runDiagnostics: 'Run Diagnostics',
+      runDiagnostics: 'Run Analysis',
       runDiagnosticsPersonal: 'Analyze my skin',
       dermoscopicExamples: 'Dermoscopic Examples',
-      noResult: 'No result yet. Upload images and run diagnosis.',
+      noResult: 'No result yet. Upload images and run analysis.',
       noResultPersonal: 'No result yet. Upload images to analyze my skin in personal use.',
       labelAnalysis: 'Ask AI',
       labelAsk: 'Ask other doctors',
@@ -155,18 +156,18 @@ function App() {
       patientId: 'Patient ID',
       patientIdPlaceholder: 'Enter Patient ID (e.g., P001, PAT-2026-001)',
       patientIdHelper: 'Used for tracking patient history and case organization',
+      optional: 'Optional',
       includeClinicalImage: 'Include clinical image',
       onlySupportedImages: `Only ${SUPPORTED_ANALYSIS_IMAGE_LABEL} images are supported.`,
       maxImageSize: 'Each image must be 8 MB or smaller.',
       maxDermoscopicImages: `You can upload up to ${MAX_DERMOSCOPIC_IMAGES} dermoscopic images.`,
       dermoscopicRequired: 'At least one dermoscopic image is required for analysis.',
-      patientIdRequired: 'Patient ID is required before running diagnostics.',
       caseSaved: 'Case saved successfully!',
       loginRequiredFeature: 'Please log in as a doctor to access this feature.'
     },
     tr: {
-      landingSubtitle: 'Profesyonel Yapay Zeka Cilt Teşhisi',
-      landingDescription: 'Lezyon sınıflandırması için dermatoskopik görüntüler yükleyin; Çift Dallı EfficientNetV2 ile anında sonuç alın.',
+      landingSubtitle: 'Profesyonel Yapay Zeka Cilt Analizi',
+      landingDescription: 'Lezyon sınıflandırması için dermatoskopik görüntüler yükleyin; MILK10k SwinV2 ile anında sonuç alın.',
       forDoctors: 'Doktorlar için',
       forResearchers: 'Araştırmacılar için',
       personalUse: 'Bireysel Kullanım',
@@ -181,12 +182,13 @@ function App() {
       patientHistory: 'Hasta Geçmişi',
       historyMetadata: 'Geçmiş / Metaveri',
       checkImages: 'Görüntülerin yüksek çözünürlüklü ve odaklı olduğundan emin olun.',
-      consultProfessional: 'Kullanımdan sonra lütfen bir sağlık uzmanına danışın.',
+      consultProfessional: 'Bu yapay zeka çıktısı kesin tanı değildir. Lütfen yetkin bir sağlık uzmanına danışın.',
+      privacyNotice: 'KVKK/gizlilik bildirimi: yalnızca yetkili klinik görüntüleri yükleyin ve gereksiz kişisel veriden kaçının.',
       processing: 'İşleniyor...',
-      runDiagnostics: 'Teşhise Başla',
+      runDiagnostics: 'Analizi Başlat',
       runDiagnosticsPersonal: 'Cildimi analiz et (Bireysel Kullanım)',
       dermoscopicExamples: 'Dermatoskopik Örnekler',
-      noResult: 'Sonuç yok. Görüntü yükleyin ve teşhis çalıştırın.',
+      noResult: 'Sonuç yok. Görüntü yükleyin ve analiz çalıştırın.',
       noResultPersonal: 'Sonuç yok. Bireysel kullanımda cildimi analiz etmek için görüntü yükleyin.',
       labelAnalysis: 'AI\'ye Sor',
       labelAsk: 'Diğer doktorlara sor',
@@ -207,12 +209,12 @@ function App() {
       patientId: 'Hasta ID',
       patientIdPlaceholder: 'Hasta ID girin (örn. P001, PAT-2026-001)',
       patientIdHelper: 'Hasta geçmişini ve vaka düzenini takip etmek için kullanılır',
+      optional: 'Opsiyonel',
       includeClinicalImage: 'Klinik görüntü ekle',
       onlySupportedImages: `Yalnızca ${SUPPORTED_ANALYSIS_IMAGE_LABEL} görüntüleri desteklenir.`,
       maxImageSize: 'Her görüntü 8 MB veya daha küçük olmalıdır.',
       maxDermoscopicImages: `En fazla ${MAX_DERMOSCOPIC_IMAGES} dermatoskopik görüntü yükleyebilirsiniz.`,
       dermoscopicRequired: 'Analiz için en az bir dermatoskopik görüntü gereklidir.',
-      patientIdRequired: 'Teşhisi çalıştırmadan önce Hasta ID gereklidir.',
       caseSaved: 'Vaka başarılı şekilde kaydedildi!',
       loginRequiredFeature: 'Bu özelliğe erişmek için doktor olarak giriş yapın.'
     }
@@ -632,17 +634,6 @@ function App() {
       return;
     }
 
-    if (userType === 'doctor' && !patientId.trim()) {
-      setError(t.patientIdRequired);
-      return;
-    }
-
-    // Validate patient ID for doctors
-    if (userType === 'doctor' && !patientId.trim()) {
-      setError("Patient ID is required for doctors to run analysis.");
-      return;
-    }
-
     setLoading(true);
     setError(null);
     setResult(null);
@@ -694,7 +685,7 @@ function App() {
               'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: new URLSearchParams({
-              patient_id: patientId || 'Unknown',
+              patient_id: patientId.trim(),
               prediction: data.prediction || data.details?.top_class || '',
               confidence_score: confidence,
               lesion_location: location || 'Not specified',
@@ -1061,7 +1052,10 @@ function App() {
                       {/* Patient ID Input (Doctor Mode) */}
                       {userType === 'doctor' && (
                         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                          <label className="mb-2 block text-sm font-bold text-slate-700">{t.patientId} <span className="text-red-500">*</span></label>
+                          <label className="mb-2 block text-sm font-bold text-slate-700">
+                            {t.patientId}
+                            <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">{t.optional}</span>
+                          </label>
                           <input
                             type="text"
                             value={patientId}
@@ -1112,6 +1106,9 @@ function App() {
                             {t.consultProfessional}
                           </p>
                         )}
+                        <p className="text-xs text-slate-500">
+                          {t.privacyNotice}
+                        </p>
                         <button
                           onClick={handleSubmit}
                           disabled={loading || dermFiles.length === 0}
@@ -1130,7 +1127,7 @@ function App() {
 
                     </div>
                   )}
-                  {/* Right side: Diagnosis Result and Notes */}
+                  {/* Right side: Analysis Result and Notes */}
                   <div className={`${!result ? 'flex-1' : 'w-full'} flex ${result && userType === 'doctor' ? 'flex-col xl:flex-row' : 'flex-col'} items-center justify-start gap-4`}>
                     {/* Dermoscopic examples — hidden after results arrive */}
                     {(result || loading) && (

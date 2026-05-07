@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, History, Loader2, MessageSquareText, RefreshCw, Trash2 } from 'lucide-react';
 import {
   createSecondOpinionComment,
+  deleteSecondOpinionComment,
   deleteSecondOpinionPost,
   fetchSecondOpinionPosts,
 } from '../services/secondOpinionService';
@@ -22,6 +23,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
       refreshing: 'Refreshing feed...',
       error: 'Could not load second opinion feed.',
       deletePost: 'Delete Post',
+      deleteComment: 'Delete Comment',
       deleting: 'Deleting...',
       refresh: 'Refresh feed',
       metadata: 'Metadata',
@@ -40,6 +42,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
       refreshing: 'Akış yenileniyor...',
       error: 'İkinci görüş akışı yüklenemedi.',
       deletePost: 'Postu Sil',
+      deleteComment: 'Yorumu Sil',
       deleting: 'Siliniyor...',
       refresh: 'Akışı yenile',
       metadata: 'Metaveri',
@@ -54,6 +57,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
   const [error, setError] = useState('');
   const [postingCommentId, setPostingCommentId] = useState(null);
   const [deletingPostId, setDeletingPostId] = useState(null);
+  const [deletingCommentId, setDeletingCommentId] = useState(null);
   const [commentDrafts, setCommentDrafts] = useState({});
   const [commentAnonymous, setCommentAnonymous] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -135,6 +139,7 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
                     id: createdComment.id,
                     text: createdComment.comment_text,
                     author: createdComment.author_name || 'Anonymous',
+                    canDelete: Boolean(createdComment.can_delete),
                   },
                 ],
               }
@@ -181,6 +186,31 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
       setError(friendlyApiMessage(err.message, loadErrorText));
     } finally {
       setDeletingPostId(null);
+    }
+  };
+
+  const handleDeleteComment = async (postId, commentId) => {
+    if (!postId || !commentId) return;
+
+    setError('');
+    setDeletingCommentId(commentId);
+
+    try {
+      await deleteSecondOpinionComment(postId, commentId);
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                comments: post.comments.filter((comment) => comment.id !== commentId),
+              }
+            : post
+        )
+      );
+    } catch (err) {
+      setError(friendlyApiMessage(err.message, loadErrorText));
+    } finally {
+      setDeletingCommentId(null);
     }
   };
 
@@ -321,11 +351,27 @@ export default function SecondOpinionFeed({ language = 'en', doctorProfile, onVi
                   {post.comments.length > 0 ? (
                     <div className="space-y-2">
                       {post.comments.map((comment) => (
-                        <div key={comment.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm">
-                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                            {comment.author}
+                        <div key={comment.id} className="flex gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                              {comment.author}
+                            </div>
+                            <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{comment.text}</p>
                           </div>
-                          <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{comment.text}</p>
+                          {comment.canDelete && (
+                            <button
+                              type="button"
+                              aria-label={t.deleteComment}
+                              title={t.deleteComment}
+                              onClick={() => handleDeleteComment(post.id, comment.id)}
+                              disabled={deletingCommentId === comment.id}
+                              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {deletingCommentId === comment.id
+                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                : <Trash2 className="h-4 w-4" />}
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
