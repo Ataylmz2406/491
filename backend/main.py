@@ -40,7 +40,7 @@ from model_utils import (
 
 # --- CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_WEIGHTS = os.path.abspath(os.path.join(BASE_DIR, "..", MODEL_CHECKPOINT_NAME))
+MODEL_WEIGHTS = os.path.abspath(os.path.join(BASE_DIR, MODEL_CHECKPOINT_NAME))
 DB_PATH = os.path.join(BASE_DIR, "suderm.db")
 logger = logging.getLogger("suderm")
 
@@ -705,6 +705,8 @@ def _issue_auth_session(
 
 def _public_doctor_name(raw_name: str | None, is_anonymous: bool) -> str:
     if is_anonymous:
+        if raw_name and raw_name.strip():
+            return raw_name.strip()
         return "Anonymous Doctor"
     if raw_name and raw_name.strip():
         return raw_name.strip()
@@ -1556,35 +1558,29 @@ def auth_register(payload: AuthLoginRequest, response: Response):
         raise HTTPException(status_code=400, detail="Passwords do not match")
 
     if user_type == "doctor":
-        doctor_id = _clean_optional_text(payload.doctor_id, 120)
         hospital = _clean_optional_text(payload.hospital, 255)
         full_name = _clean_optional_text(payload.full_name, 255)
         phone_number = _clean_optional_text(payload.phone_number, 20)
         email = _clean_optional_text(payload.email, 255)
-        
-        if not doctor_id:
-            raise HTTPException(status_code=400, detail="doctor_id is required for doctor registration")
+
         if not email:
             raise HTTPException(status_code=400, detail="email is required for doctor registration")
         if not full_name:
             raise HTTPException(status_code=400, detail="full_name is required for doctor registration")
-        if not phone_number:
-            raise HTTPException(status_code=400, detail="phone_number is required for doctor registration")
-            
+
+        doctor_id = f"DR{secrets.token_hex(3).upper()}"
         subject = email.lower()
-        display_name = f"{full_name} ({doctor_id})"
+        display_name = full_name
     else:
         email = _clean_optional_text(payload.email, 255)
         full_name = _clean_optional_text(payload.full_name, 255)
         phone_number = _clean_optional_text(payload.phone_number, 20)
-        
+
         if not email:
             raise HTTPException(status_code=400, detail="email is required for registration")
         if not full_name:
             raise HTTPException(status_code=400, detail="full_name is required for registration")
-        if not phone_number:
-            raise HTTPException(status_code=400, detail="phone_number is required for registration")
-            
+
         subject = email.lower()
         display_name = full_name
         hospital = None
@@ -2084,7 +2080,7 @@ def create_second_opinion_post(
     conn = get_db_connection()
     try:
         now = utc_now_iso()
-        doctor_name = None if payload.is_anonymous else requester_display_name
+        doctor_name = f"Dr. Anon#{secrets.randbelow(9000) + 1000}" if payload.is_anonymous else requester_display_name
         doctor_affiliation = None if payload.is_anonymous else _clean_optional_text(payload.doctor_affiliation, 255)
 
         cursor = conn.execute(
@@ -2150,7 +2146,7 @@ def create_second_opinion_comment(
     try:
         _get_post_or_404(conn, post_id)
         now = utc_now_iso()
-        author_name = None if payload.is_anonymous else requester_display_name
+        author_name = f"Dr. Anon#{secrets.randbelow(9000) + 1000}" if payload.is_anonymous else requester_display_name
 
         cursor = conn.execute(
             """

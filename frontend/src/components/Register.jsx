@@ -11,7 +11,6 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
     email: '',
     phoneNumber: '',
     hospitalName: '',
-    doctorId: '',
   });
   const [credentials, setCredentials] = useState({
     password: '',
@@ -76,18 +75,9 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
       setError('Valid email is required');
       return;
     }
-    if (!formData.phoneNumber.trim()) {
-      setError('Phone number is required');
-      return;
-    }
-
     if (userType === 'doctor') {
       if (!formData.hospitalName.trim()) {
         setError('Hospital name is required');
-        return;
-      }
-      if (!formData.doctorId.trim()) {
-        setError('Doctor ID is required');
         return;
       }
     }
@@ -129,7 +119,6 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
 
       if (userType === 'doctor') {
         payload.hospital = formData.hospitalName;
-        payload.doctor_id = formData.doctorId;
       }
 
       const result = await authRegister(payload);
@@ -242,7 +231,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
               <div>
                 <label htmlFor="register-email" className="block text-sm font-medium text-gray-700 mb-2">
                   <Mail className="w-4 h-4 inline mr-2" />
-                  Email <span className="text-red-500">*</span>
+                  {userType === 'doctor' ? 'Institutional Email' : 'Email'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="register-email"
@@ -259,7 +248,7 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
               <div>
                 <label htmlFor="register-phone-number" className="block text-sm font-medium text-gray-700 mb-2">
                   <Phone className="w-4 h-4 inline mr-2" />
-                  Phone Number <span className="text-red-500">*</span>
+                  Phone Number
                 </label>
                 <input
                   id="register-phone-number"
@@ -291,19 +280,6 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
                     />
                   </div>
 
-                  <div>
-                    <label htmlFor="register-doctor-id" className="block text-sm font-medium text-gray-700 mb-2">
-                      Doctor ID <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      id="register-doctor-id"
-                      type="text"
-                      value={formData.doctorId}
-                      onChange={(e) => handleInputChange('doctorId', e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
-                      placeholder="MD12345"
-                    />
-                  </div>
                 </>
               )}
             </form>
