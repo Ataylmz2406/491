@@ -175,7 +175,8 @@ def init_db():
                 phone_number TEXT,
                 hospital TEXT,
                 doctor_id TEXT,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                is_admin INTEGER NOT NULL DEFAULT 0
             )
             """
         )
@@ -361,6 +362,7 @@ class AuthLoginResponse(BaseModel):
     phone_number: str | None = None
     hospital: str | None = None
     doctor_id: str | None = None
+    is_admin: bool = False
 
 
 class AuthMeResponse(BaseModel):
@@ -372,6 +374,7 @@ class AuthMeResponse(BaseModel):
     phone_number: str | None = None
     hospital: str | None = None
     doctor_id: str | None = None
+    is_admin: bool = False
 
 
 class ImageLabelCreate(BaseModel):
@@ -546,12 +549,27 @@ def _verify_doctor_token(authorization: str) -> sqlite3.Row:
     return token_row
 
 
+def _verify_admin_token(authorization: str) -> sqlite3.Row:
+    token_row = _verify_auth_token(authorization)
+    conn = get_db_connection()
+    try:
+        user = conn.execute(
+            "SELECT is_admin FROM users WHERE subject = ? AND user_type = ?",
+            (token_row["subject"], token_row["user_type"]),
+        ).fetchone()
+        if not user or not user["is_admin"]:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return token_row
+    finally:
+        conn.close()
+
+
 def _get_user_profile(user_type: str, subject: str) -> dict:
     conn = get_db_connection()
     try:
         row = conn.execute(
             """
-            SELECT display_name, email, full_name, phone_number, hospital, doctor_id
+            SELECT display_name, email, full_name, phone_number, hospital, doctor_id, is_admin
             FROM users
             WHERE subject = ? AND user_type = ?
             """,
@@ -681,6 +699,7 @@ def _issue_auth_session(
     phone_number: str | None = None,
     hospital: str | None = None,
     doctor_id: str | None = None,
+    is_admin: bool = False,
 ) -> AuthLoginResponse:
     now = datetime.now(timezone.utc).replace(microsecond=0)
     access_expires_at = now + timedelta(minutes=AUTH_ACCESS_TOKEN_TTL_MINUTES)
@@ -700,6 +719,7 @@ def _issue_auth_session(
         phone_number=phone_number,
         hospital=hospital,
         doctor_id=doctor_id,
+        is_admin=is_admin,
     )
 
 
@@ -836,6 +856,7 @@ def ensure_user_schema_columns():
             "full_name": "TEXT",
             "phone_number": "TEXT",
             "doctor_id": "TEXT",
+            "is_admin": "INTEGER NOT NULL DEFAULT 0",
         }
         for column_name, column_type in migration_columns.items():
             if column_name not in columns:
@@ -1311,6 +1332,41 @@ def ensure_mil10k_labels_schema():
     finally:
         conn.close()
 
+ADMIN_EMAIL = os.environ.get("SUDERM_ADMIN_EMAIL", "admin@suderm.local")
+ADMIN_PASSWORD = os.environ.get("SUDERM_ADMIN_PASSWORD", "Admin123!")
+
+
+def ensure_admin_account():
+    """Create the default admin account on first startup if it does not exist."""
+    subject = ADMIN_EMAIL.lower()
+    conn = get_db_connection()
+    try:
+        existing = conn.execute(
+            "SELECT id FROM users WHERE subject = ? AND user_type = 'personal'",
+            (subject,),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE users SET is_admin = 1 WHERE subject = ? AND user_type = 'personal'",
+                (subject,),
+            )
+            conn.commit()
+            return
+        conn.execute(
+            """
+            INSERT INTO users
+              (subject, user_type, password_hash, display_name, email, full_name,
+               phone_number, hospital, doctor_id, created_at, is_admin)
+            VALUES (?, 'personal', ?, 'Admin', ?, 'Admin', NULL, NULL, NULL, ?, 1)
+            """,
+            (subject, _hash_password(ADMIN_PASSWORD), ADMIN_EMAIL, utc_now_iso()),
+        )
+        conn.commit()
+        logger.info("Admin account created: %s", subject)
+    finally:
+        conn.close()
+
+
 # --- LIFESPAN MANAGER ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1329,7 +1385,8 @@ async def lifespan(app: FastAPI):
     ensure_auth_token_schema_columns()
     ensure_mil10k_labels_schema()
     ensure_second_opinion_strict_constraints()
-    
+    ensure_admin_account()
+
     # 2. Load SwinV2 checkpoint and initialize model
     logger.info("Initializing %s model on %s", MODEL_DISPLAY_NAME, DEVICE)
     if os.path.exists(MODEL_WEIGHTS):
@@ -1642,7 +1699,7 @@ def auth_login(payload: AuthLoginRequest, response: Response):
     try:
         user = conn.execute(
             """
-            SELECT display_name, password_hash, email, full_name, phone_number, hospital, doctor_id
+            SELECT display_name, password_hash, email, full_name, phone_number, hospital, doctor_id, is_admin
             FROM users
             WHERE subject = ? AND user_type = ?
             """,
@@ -1665,6 +1722,7 @@ def auth_login(payload: AuthLoginRequest, response: Response):
         phone_number = user["phone_number"]
         hospital = user["hospital"]
         doctor_id = user["doctor_id"]
+        is_admin = bool(user["is_admin"])
     finally:
         conn.close()
 
@@ -1678,6 +1736,7 @@ def auth_login(payload: AuthLoginRequest, response: Response):
         phone_number=phone_number,
         hospital=hospital,
         doctor_id=doctor_id,
+        is_admin=is_admin,
     )
 
 
@@ -1700,6 +1759,7 @@ def auth_refresh(
         phone_number=profile["phone_number"],
         hospital=profile["hospital"],
         doctor_id=profile["doctor_id"],
+        is_admin=bool(profile.get("is_admin", 0)),
     )
 
 
@@ -1716,6 +1776,7 @@ def auth_me(authorization: str = Header(default="")):
         phone_number=profile["phone_number"],
         hospital=profile["hospital"],
         doctor_id=profile["doctor_id"],
+        is_admin=bool(profile.get("is_admin", 0)),
     )
 
 
@@ -1735,6 +1796,52 @@ def auth_logout(
 
     _clear_refresh_cookie(response)
     return {"ok": True}
+
+
+# --- ADMIN ENDPOINTS ---
+
+@app.get("/admin/users")
+def admin_list_users(authorization: str = Header(default="")):
+    _verify_admin_token(authorization)
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, subject, user_type, display_name, email, full_name,
+                   phone_number, hospital, doctor_id, created_at, is_admin
+            FROM users
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+@app.delete("/admin/users/{user_id}")
+def admin_delete_user(user_id: int, authorization: str = Header(default="")):
+    token_row = _verify_admin_token(authorization)
+    conn = get_db_connection()
+    try:
+        target = conn.execute(
+            "SELECT subject, user_type FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        if (target["subject"] == token_row["subject"]
+                and target["user_type"] == token_row["user_type"]):
+            raise HTTPException(status_code=400, detail="Cannot delete your own admin account")
+        now = utc_now_iso()
+        conn.execute(
+            "UPDATE auth_tokens SET revoked_at = ? WHERE subject = ? AND user_type = ? AND revoked_at IS NULL",
+            (now, target["subject"], target["user_type"]),
+        )
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        return {"ok": True, "deleted_id": user_id}
+    finally:
+        conn.close()
 
 
 @app.post("/doctor/save-analysis")

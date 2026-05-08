@@ -13,6 +13,7 @@ import PatientLookup from './components/PatientLookup';
 import CaseNotes from './components/CaseNotes';
 import Tutorial from './components/Tutorial';
 import MyAccount from './components/MyAccount';
+import AdminPanel from './components/AdminPanel';
 import { CaseProvider, useCaseContext } from './context/CaseContext';
 import { authLogout, authRefresh, clearAccessToken, setAccessToken, getAccessToken } from './services/authService';
 import { friendlyApiMessage } from './services/apiErrorService';
@@ -66,6 +67,7 @@ function App() {
   const [userType, setUserType] = useState(null); // 'doctor' | 'researcher' | 'personal'
   const [loginData, setLoginData] = useState(null); // store credentials/misc info
   const [showMyAccount, setShowMyAccount] = useState(false); // Show My Account page
+  const [showAdminPanel, setShowAdminPanel] = useState(false); // Show Admin Panel
 
   // --- Image State ---
   const [dermFiles, setDermFiles] = useState([]);
@@ -249,7 +251,11 @@ function App() {
         setLoginData(profileData);
         setLoggedIn(true);
         setShowLanding(false);
-        setShowTutorial(!hasSeenTutorialThisSession(effectiveUserType));
+        if (profileData?.is_admin) {
+          setShowAdminPanel(true);
+        } else {
+          setShowTutorial(!hasSeenTutorialThisSession(effectiveUserType));
+        }
         localStorage.setItem('suderm_user_type', effectiveUserType);
         localStorage.setItem('suderm_login_data', JSON.stringify(profileData));
       } catch (e) {
@@ -380,6 +386,12 @@ function App() {
     // Persist login data to localStorage
     localStorage.setItem('suderm_user_type', data?.user_type || userType);
     localStorage.setItem('suderm_login_data', JSON.stringify(profileData));
+    if (data?.is_admin) {
+      setShowAdminPanel(true);
+      setShowLogin(false);
+      setShowRegister(false);
+      return;
+    }
     if (pendingTab) {
       setSelectedTab(pendingTab);
       setPendingTab(null);
@@ -398,6 +410,7 @@ function App() {
     setUserType(null);
     setShowLanding(true);
     setShowMyAccount(false);
+    setShowAdminPanel(false);
     setShowTutorial(false);
     setPendingTab(null);
     setSelectedTab('analysis');
@@ -801,6 +814,15 @@ function App() {
         onSuccess={handleLoginSuccess}
         onSwitchToLogin={handleSwitchToLogin}
         onCancel={handleAuthCancel}
+      />
+    );
+  }
+
+  if (showAdminPanel && loggedIn) {
+    return (
+      <AdminPanel
+        loginData={loginData}
+        onLogout={handleLogout}
       />
     );
   }
