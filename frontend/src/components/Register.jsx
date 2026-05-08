@@ -269,15 +269,16 @@ export default function Register({ onSuccess, onSwitchToLogin, onCancel }) {
                       <Building className="w-4 h-4 inline mr-2" />
                       Hospital/Organization <span className="text-red-500">*</span>
                     </label>
-                    <input
+                    <select
                       id="register-hospital-name"
-                      type="text"
                       value={formData.hospitalName}
                       onChange={(e) => handleInputChange('hospitalName', e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500"
-                      placeholder="Medical Center Name"
-                      autoComplete="organization"
-                    />
+                      className="w-full rounded-lg border border-slate-300 px-4 py-2.5 outline-none transition focus:border-transparent focus:ring-2 focus:ring-brand-500 bg-white"
+                    >
+                      <option value="">Select Hospital</option>
+                      <option value="İstanbul Üniversitesi Cerrahpaşa Tıp Fakültesi Hastanesi">İstanbul Üniversitesi Cerrahpaşa Tıp Fakültesi Hastanesi</option>
+                      <option value="Şişli Hamidiye Etfal Eğitim ve Araştırma Hastanesi">Şişli Hamidiye Etfal Eğitim ve Araştırma Hastanesi</option>
+                    </select>
                   </div>
 
                 </>
