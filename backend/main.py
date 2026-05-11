@@ -1,3 +1,4 @@
+import asyncio
 import io
 import os
 import uuid
@@ -16,6 +17,9 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query, Heade
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel, Field
 from PIL import Image, UnidentifiedImageError
 from contextlib import asynccontextmanager
@@ -63,10 +67,12 @@ else:
         DEVICE = torch.device("cpu")
 
 HEATMAP_DIR = "static/heatmaps"
+INFERENCE_MAX_CONCURRENCY = int(os.environ.get("SUDERM_INFERENCE_MAX_CONCURRENCY", "2"))
 
 # --- GLOBAL VARIABLES ---
 model = None
 transform = None
+inference_semaphore: asyncio.Semaphore | None = None
 
 
 # --- DATABASE ---
@@ -671,6 +677,21 @@ def _issue_token_record(user_type: str, subject: str, display_name: str, token_t
         conn.close()
 
     return raw_token
+
+
+def _purge_expired_tokens() -> int:
+    """Delete expired and revoked tokens. Returns number of rows removed."""
+    now = utc_now_iso()
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute(
+            "DELETE FROM auth_tokens WHERE expires_at <= ? OR revoked_at IS NOT NULL",
+            (now,),
+        )
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()
 
 
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
@@ -1370,7 +1391,8 @@ def ensure_admin_account():
 # --- LIFESPAN MANAGER ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model, transform
+    global model, transform, inference_semaphore
+    inference_semaphore = asyncio.Semaphore(INFERENCE_MAX_CONCURRENCY)
     
     # 1. Create heatmap directory
     os.makedirs(HEATMAP_DIR, exist_ok=True)
@@ -1386,6 +1408,8 @@ async def lifespan(app: FastAPI):
     ensure_mil10k_labels_schema()
     ensure_second_opinion_strict_constraints()
     ensure_admin_account()
+    purged = _purge_expired_tokens()
+    logger.info("Startup token cleanup: removed %d expired/revoked token(s)", purged)
 
     # 2. Load SwinV2 checkpoint and initialize model
     logger.info("Initializing %s model on %s", MODEL_DISPLAY_NAME, DEVICE)
@@ -1410,17 +1434,53 @@ async def lifespan(app: FastAPI):
     
     model.to(DEVICE)
     model.eval()
-    
+
     # 3. Initialize Transform
     transform = get_inference_transform(IMG_SIZE)
-    
+
+    # 4. Warmup: one dummy forward pass so the first real request isn't slow
+    logger.info("Running model warmup on %s", DEVICE)
+    try:
+        with torch.no_grad():
+            dummy = torch.zeros((1, 3, IMG_SIZE, IMG_SIZE), device=DEVICE)
+            model(dummy)
+            del dummy
+        if DEVICE.type == "mps":
+            torch.mps.empty_cache()
+        logger.info("Model warmup complete")
+    except Exception as e:
+        logger.warning("Model warmup failed (non-fatal): %s", e)
+
     yield
     
     # Cleanup
     model = None
     transform = None
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(lifespan=lifespan, title="SUDerm API", version="1.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def attach_request_id(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 @app.middleware("http")
@@ -1457,8 +1517,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
 
 def interpret_prediction(probs):
@@ -1528,12 +1589,47 @@ def _zero_clinical_tensor():
     return torch.zeros((1, 3, IMG_SIZE, IMG_SIZE), device=DEVICE)
 
 
+def _run_inference(dermoscopic_images: list) -> np.ndarray:
+    """Run model inference synchronously. Called via asyncio.to_thread to avoid blocking the event loop."""
+    prediction_tensors = []
+    with torch.no_grad():
+        for derm_img in dermoscopic_images:
+            derm_tensor = transform(derm_img).unsqueeze(0).to(DEVICE)
+            logits = model(derm_tensor)
+            prediction_tensors.append(torch.softmax(logits, dim=1))
+            del derm_tensor
+    probs = torch.stack(prediction_tensors, dim=0).mean(dim=0)
+    return probs[0].cpu().numpy()
+
 
 # --- ENDPOINTS ---
 
 @app.get("/")
 def read_root():
     return {"message": "SUDerm - MILK10k SwinV2 Skin Lesion Analysis API (Sabanci University)"}
+
+
+@app.get("/health")
+def health_check():
+    db_ok = False
+    try:
+        conn = get_db_connection()
+        conn.execute("SELECT 1")
+        conn.close()
+        db_ok = True
+    except Exception:
+        pass
+
+    return {
+        "status": "ok" if (model is not None and db_ok) else "degraded",
+        "model": {
+            "loaded": model is not None,
+            "name": MODEL_DISPLAY_NAME,
+            "architecture": MODEL_ARCHITECTURE,
+            "device": str(DEVICE),
+        },
+        "database": {"connected": db_ok},
+    }
 
 
 def _hash_password(password: str) -> str:
@@ -1598,8 +1694,42 @@ def _validate_password(password: str) -> tuple[bool, str]:
     
     return True, ""
 
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_PHONE_RE = re.compile(r"^\+?[\d\s\-().]{7,30}$")
+
+REGISTER_FIELD_LIMITS = {
+    "email": 254,
+    "full_name": 120,
+    "hospital": 200,
+    "phone_number": 30,
+}
+
+
+def _validate_email(email: str | None) -> None:
+    if email is None:
+        return
+    if not _EMAIL_RE.match(email.strip()):
+        raise HTTPException(status_code=400, detail="Invalid email address format")
+
+
+def _validate_register_fields(payload: "AuthLoginRequest") -> None:
+    for field, max_len in REGISTER_FIELD_LIMITS.items():
+        value = getattr(payload, field, None)
+        if value and len(value.strip()) > max_len:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{field} exceeds maximum length of {max_len} characters",
+            )
+    if payload.phone_number:
+        phone = payload.phone_number.strip()
+        if phone and not _PHONE_RE.match(phone):
+            raise HTTPException(status_code=400, detail="Invalid phone number format")
+
+
 @app.post("/auth/register", response_model=AuthLoginResponse)
-def auth_register(payload: AuthLoginRequest, response: Response):
+@limiter.limit("5/minute")
+def auth_register(request: Request, payload: AuthLoginRequest, response: Response):
     user_type = payload.user_type.strip().lower()
     if user_type not in AUTH_ALLOWED_USER_TYPES:
         allowed = ", ".join(sorted(AUTH_ALLOWED_USER_TYPES))
@@ -1613,6 +1743,9 @@ def auth_register(payload: AuthLoginRequest, response: Response):
     # Check password confirmation
     if payload.confirm_password != payload.password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
+
+    _validate_email(payload.email)
+    _validate_register_fields(payload)
 
     if user_type == "doctor":
         hospital = _clean_optional_text(payload.hospital, 255)
@@ -1675,7 +1808,8 @@ def auth_register(payload: AuthLoginRequest, response: Response):
     )
 
 @app.post("/auth/login", response_model=AuthLoginResponse)
-def auth_login(payload: AuthLoginRequest, response: Response):
+@limiter.limit("10/minute")
+def auth_login(request: Request, payload: AuthLoginRequest, response: Response):
     user_type = payload.user_type.strip().lower()
     if user_type not in AUTH_ALLOWED_USER_TYPES:
         allowed = ", ".join(sorted(AUTH_ALLOWED_USER_TYPES))
@@ -1800,6 +1934,38 @@ def auth_logout(
 
 # --- ADMIN ENDPOINTS ---
 
+@app.get("/admin/stats")
+def admin_stats(authorization: str = Header(default="")):
+    _verify_admin_token(authorization)
+    conn = get_db_connection()
+    try:
+        now = utc_now_iso()
+        stats = {}
+        stats["users"] = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        stats["users_by_type"] = {
+            row["user_type"]: row["cnt"]
+            for row in conn.execute(
+                "SELECT user_type, COUNT(*) AS cnt FROM users GROUP BY user_type"
+            ).fetchall()
+        }
+        stats["diagnoses"] = conn.execute("SELECT COUNT(*) FROM diagnoses").fetchone()[0]
+        stats["second_opinion_posts"] = conn.execute(
+            "SELECT COUNT(*) FROM second_opinion_posts"
+        ).fetchone()[0]
+        stats["active_tokens"] = conn.execute(
+            "SELECT COUNT(*) FROM auth_tokens WHERE expires_at > ? AND revoked_at IS NULL",
+            (now,),
+        ).fetchone()[0]
+        stats["expired_tokens_pending_cleanup"] = conn.execute(
+            "SELECT COUNT(*) FROM auth_tokens WHERE expires_at <= ? OR revoked_at IS NOT NULL",
+            (now,),
+        ).fetchone()[0]
+        stats["mil10k_labels"] = conn.execute("SELECT COUNT(*) FROM mil10k_labels").fetchone()[0]
+        return stats
+    finally:
+        conn.close()
+
+
 @app.get("/admin/users")
 def admin_list_users(authorization: str = Header(default="")):
     _verify_admin_token(authorization)
@@ -1816,6 +1982,14 @@ def admin_list_users(authorization: str = Header(default="")):
         return [dict(r) for r in rows]
     finally:
         conn.close()
+
+
+@app.delete("/admin/tokens/expired")
+def admin_purge_expired_tokens(authorization: str = Header(default="")):
+    _verify_admin_token(authorization)
+    removed = _purge_expired_tokens()
+    logger.info("Admin token purge: removed %d row(s)", removed)
+    return {"removed": removed}
 
 
 @app.delete("/admin/users/{user_id}")
@@ -2423,7 +2597,9 @@ def delete_second_opinion_post(post_id: int, authorization: str = Header(default
         conn.close()
 
 @app.post("/predict")
+@limiter.limit("10/minute")
 async def predict(
+    request: Request,
     dermoscopic_image: UploadFile = File(...),
     dermoscopic_image_2: UploadFile = File(None),
     dermoscopic_image_3: UploadFile = File(None),
@@ -2463,16 +2639,9 @@ async def predict(
             clin_img = await _read_prediction_image(clinical_image, "Clinical image")
             zoom_warning = check_zoom_level(clin_img)
 
-        prediction_tensors = []
-        with torch.no_grad():
-            for derm_img in dermoscopic_images:
-                derm_tensor = transform(derm_img).unsqueeze(0).to(DEVICE)
-                logits = model(derm_tensor)
-                prediction_tensors.append(torch.softmax(logits, dim=1))
-                del derm_tensor
-        
-        probs = torch.stack(prediction_tensors, dim=0).mean(dim=0)
-        probs_np = probs[0].cpu().numpy()
+        async with inference_semaphore:
+            probs_np = await asyncio.to_thread(_run_inference, dermoscopic_images)
+        probs = torch.from_numpy(probs_np).unsqueeze(0)
             
         pred_label, conf_score = interpret_prediction(probs)
         review_assessments = [item for item in image_assessments if item["status"] != "plausible"]
