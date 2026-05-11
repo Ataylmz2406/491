@@ -1921,6 +1921,38 @@ def auth_logout(
 
 # --- ADMIN ENDPOINTS ---
 
+@app.get("/admin/stats")
+def admin_stats(authorization: str = Header(default="")):
+    _verify_admin_token(authorization)
+    conn = get_db_connection()
+    try:
+        now = utc_now_iso()
+        stats = {}
+        stats["users"] = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        stats["users_by_type"] = {
+            row["user_type"]: row["cnt"]
+            for row in conn.execute(
+                "SELECT user_type, COUNT(*) AS cnt FROM users GROUP BY user_type"
+            ).fetchall()
+        }
+        stats["diagnoses"] = conn.execute("SELECT COUNT(*) FROM diagnoses").fetchone()[0]
+        stats["second_opinion_posts"] = conn.execute(
+            "SELECT COUNT(*) FROM second_opinion_posts"
+        ).fetchone()[0]
+        stats["active_tokens"] = conn.execute(
+            "SELECT COUNT(*) FROM auth_tokens WHERE expires_at > ? AND revoked_at IS NULL",
+            (now,),
+        ).fetchone()[0]
+        stats["expired_tokens_pending_cleanup"] = conn.execute(
+            "SELECT COUNT(*) FROM auth_tokens WHERE expires_at <= ? OR revoked_at IS NOT NULL",
+            (now,),
+        ).fetchone()[0]
+        stats["mil10k_labels"] = conn.execute("SELECT COUNT(*) FROM mil10k_labels").fetchone()[0]
+        return stats
+    finally:
+        conn.close()
+
+
 @app.get("/admin/users")
 def admin_list_users(authorization: str = Header(default="")):
     _verify_admin_token(authorization)
