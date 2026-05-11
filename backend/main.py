@@ -1405,6 +1405,8 @@ async def lifespan(app: FastAPI):
     ensure_mil10k_labels_schema()
     ensure_second_opinion_strict_constraints()
     ensure_admin_account()
+    purged = _purge_expired_tokens()
+    logger.info("Startup token cleanup: removed %d expired/revoked token(s)", purged)
 
     # 2. Load SwinV2 checkpoint and initialize model
     logger.info("Initializing %s model on %s", MODEL_DISPLAY_NAME, DEVICE)
