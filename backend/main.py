@@ -677,6 +677,21 @@ def _issue_token_record(user_type: str, subject: str, display_name: str, token_t
     return raw_token
 
 
+def _purge_expired_tokens() -> int:
+    """Delete expired and revoked tokens. Returns number of rows removed."""
+    now = utc_now_iso()
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute(
+            "DELETE FROM auth_tokens WHERE expires_at <= ? OR revoked_at IS NOT NULL",
+            (now,),
+        )
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()
+
+
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     response.set_cookie(
         key=AUTH_REFRESH_COOKIE_NAME,
