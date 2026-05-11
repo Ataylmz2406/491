@@ -1657,6 +1657,14 @@ def _validate_password(password: str) -> tuple[bool, str]:
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_PHONE_RE = re.compile(r"^\+?[\d\s\-().]{7,30}$")
+
+REGISTER_FIELD_LIMITS = {
+    "email": 254,
+    "full_name": 120,
+    "hospital": 200,
+    "phone_number": 30,
+}
 
 
 def _validate_email(email: str | None) -> None:
@@ -1664,6 +1672,20 @@ def _validate_email(email: str | None) -> None:
         return
     if not _EMAIL_RE.match(email.strip()):
         raise HTTPException(status_code=400, detail="Invalid email address format")
+
+
+def _validate_register_fields(payload: "AuthLoginRequest") -> None:
+    for field, max_len in REGISTER_FIELD_LIMITS.items():
+        value = getattr(payload, field, None)
+        if value and len(value.strip()) > max_len:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{field} exceeds maximum length of {max_len} characters",
+            )
+    if payload.phone_number:
+        phone = payload.phone_number.strip()
+        if phone and not _PHONE_RE.match(phone):
+            raise HTTPException(status_code=400, detail="Invalid phone number format")
 
 
 @app.post("/auth/register", response_model=AuthLoginResponse)
@@ -1684,6 +1706,7 @@ def auth_register(request: Request, payload: AuthLoginRequest, response: Respons
         raise HTTPException(status_code=400, detail="Passwords do not match")
 
     _validate_email(payload.email)
+    _validate_register_fields(payload)
 
     if user_type == "doctor":
         hospital = _clean_optional_text(payload.hospital, 255)
