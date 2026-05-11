@@ -67,10 +67,12 @@ else:
         DEVICE = torch.device("cpu")
 
 HEATMAP_DIR = "static/heatmaps"
+INFERENCE_MAX_CONCURRENCY = int(os.environ.get("SUDERM_INFERENCE_MAX_CONCURRENCY", "2"))
 
 # --- GLOBAL VARIABLES ---
 model = None
 transform = None
+inference_semaphore: asyncio.Semaphore | None = None
 
 
 # --- DATABASE ---
@@ -1389,7 +1391,8 @@ def ensure_admin_account():
 # --- LIFESPAN MANAGER ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model, transform
+    global model, transform, inference_semaphore
+    inference_semaphore = asyncio.Semaphore(INFERENCE_MAX_CONCURRENCY)
     
     # 1. Create heatmap directory
     os.makedirs(HEATMAP_DIR, exist_ok=True)
@@ -2591,7 +2594,8 @@ async def predict(
             clin_img = await _read_prediction_image(clinical_image, "Clinical image")
             zoom_warning = check_zoom_level(clin_img)
 
-        probs_np = await asyncio.to_thread(_run_inference, dermoscopic_images)
+        async with inference_semaphore:
+            probs_np = await asyncio.to_thread(_run_inference, dermoscopic_images)
         probs = torch.from_numpy(probs_np).unsqueeze(0)
             
         pred_label, conf_score = interpret_prediction(probs)
