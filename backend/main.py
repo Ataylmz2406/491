@@ -1593,6 +1593,29 @@ def read_root():
     return {"message": "SUDerm - MILK10k SwinV2 Skin Lesion Analysis API (Sabanci University)"}
 
 
+@app.get("/health")
+def health_check():
+    db_ok = False
+    try:
+        conn = get_db_connection()
+        conn.execute("SELECT 1")
+        conn.close()
+        db_ok = True
+    except Exception:
+        pass
+
+    return {
+        "status": "ok" if (model is not None and db_ok) else "degraded",
+        "model": {
+            "loaded": model is not None,
+            "name": MODEL_DISPLAY_NAME,
+            "architecture": MODEL_ARCHITECTURE,
+            "device": str(DEVICE),
+        },
+        "database": {"connected": db_ok},
+    }
+
+
 def _hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
     digest = hashlib.pbkdf2_hmac(
