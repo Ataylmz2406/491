@@ -1434,10 +1434,23 @@ async def lifespan(app: FastAPI):
     
     model.to(DEVICE)
     model.eval()
-    
+
     # 3. Initialize Transform
     transform = get_inference_transform(IMG_SIZE)
-    
+
+    # 4. Warmup: one dummy forward pass so the first real request isn't slow
+    logger.info("Running model warmup on %s", DEVICE)
+    try:
+        with torch.no_grad():
+            dummy = torch.zeros((1, 3, IMG_SIZE, IMG_SIZE), device=DEVICE)
+            model(dummy)
+            del dummy
+        if DEVICE.type == "mps":
+            torch.mps.empty_cache()
+        logger.info("Model warmup complete")
+    except Exception as e:
+        logger.warning("Model warmup failed (non-fatal): %s", e)
+
     yield
     
     # Cleanup
