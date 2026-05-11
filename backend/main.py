@@ -1655,6 +1655,17 @@ def _validate_password(password: str) -> tuple[bool, str]:
     
     return True, ""
 
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validate_email(email: str | None) -> None:
+    if email is None:
+        return
+    if not _EMAIL_RE.match(email.strip()):
+        raise HTTPException(status_code=400, detail="Invalid email address format")
+
+
 @app.post("/auth/register", response_model=AuthLoginResponse)
 @limiter.limit("5/minute")
 def auth_register(request: Request, payload: AuthLoginRequest, response: Response):
@@ -1671,6 +1682,8 @@ def auth_register(request: Request, payload: AuthLoginRequest, response: Respons
     # Check password confirmation
     if payload.confirm_password != payload.password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
+
+    _validate_email(payload.email)
 
     if user_type == "doctor":
         hospital = _clean_optional_text(payload.hospital, 255)
