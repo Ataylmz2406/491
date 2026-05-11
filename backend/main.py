@@ -1877,6 +1877,14 @@ def admin_list_users(authorization: str = Header(default="")):
         conn.close()
 
 
+@app.delete("/admin/tokens/expired")
+def admin_purge_expired_tokens(authorization: str = Header(default="")):
+    _verify_admin_token(authorization)
+    removed = _purge_expired_tokens()
+    logger.info("Admin token purge: removed %d row(s)", removed)
+    return {"removed": removed}
+
+
 @app.delete("/admin/users/{user_id}")
 def admin_delete_user(user_id: int, authorization: str = Header(default="")):
     token_row = _verify_admin_token(authorization)
