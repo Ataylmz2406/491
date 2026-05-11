@@ -1,3 +1,4 @@
+import asyncio
 import io
 import os
 import uuid
@@ -16,6 +17,9 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query, Heade
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel, Field
 from PIL import Image, UnidentifiedImageError
 from contextlib import asynccontextmanager
@@ -1420,7 +1424,10 @@ async def lifespan(app: FastAPI):
     model = None
     transform = None
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(lifespan=lifespan, title="SUDerm API", version="1.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.middleware("http")
@@ -1528,6 +1535,18 @@ def _zero_clinical_tensor():
     return torch.zeros((1, 3, IMG_SIZE, IMG_SIZE), device=DEVICE)
 
 
+def _run_inference(dermoscopic_images: list) -> np.ndarray:
+    """Run model inference synchronously. Called via asyncio.to_thread to avoid blocking the event loop."""
+    prediction_tensors = []
+    with torch.no_grad():
+        for derm_img in dermoscopic_images:
+            derm_tensor = transform(derm_img).unsqueeze(0).to(DEVICE)
+            logits = model(derm_tensor)
+            prediction_tensors.append(torch.softmax(logits, dim=1))
+            del derm_tensor
+    probs = torch.stack(prediction_tensors, dim=0).mean(dim=0)
+    return probs[0].cpu().numpy()
+
 
 # --- ENDPOINTS ---
 
@@ -1599,7 +1618,8 @@ def _validate_password(password: str) -> tuple[bool, str]:
     return True, ""
 
 @app.post("/auth/register", response_model=AuthLoginResponse)
-def auth_register(payload: AuthLoginRequest, response: Response):
+@limiter.limit("5/minute")
+def auth_register(request: Request, payload: AuthLoginRequest, response: Response):
     user_type = payload.user_type.strip().lower()
     if user_type not in AUTH_ALLOWED_USER_TYPES:
         allowed = ", ".join(sorted(AUTH_ALLOWED_USER_TYPES))
@@ -1675,7 +1695,8 @@ def auth_register(payload: AuthLoginRequest, response: Response):
     )
 
 @app.post("/auth/login", response_model=AuthLoginResponse)
-def auth_login(payload: AuthLoginRequest, response: Response):
+@limiter.limit("10/minute")
+def auth_login(request: Request, payload: AuthLoginRequest, response: Response):
     user_type = payload.user_type.strip().lower()
     if user_type not in AUTH_ALLOWED_USER_TYPES:
         allowed = ", ".join(sorted(AUTH_ALLOWED_USER_TYPES))
@@ -2423,7 +2444,9 @@ def delete_second_opinion_post(post_id: int, authorization: str = Header(default
         conn.close()
 
 @app.post("/predict")
+@limiter.limit("10/minute")
 async def predict(
+    request: Request,
     dermoscopic_image: UploadFile = File(...),
     dermoscopic_image_2: UploadFile = File(None),
     dermoscopic_image_3: UploadFile = File(None),
@@ -2463,16 +2486,8 @@ async def predict(
             clin_img = await _read_prediction_image(clinical_image, "Clinical image")
             zoom_warning = check_zoom_level(clin_img)
 
-        prediction_tensors = []
-        with torch.no_grad():
-            for derm_img in dermoscopic_images:
-                derm_tensor = transform(derm_img).unsqueeze(0).to(DEVICE)
-                logits = model(derm_tensor)
-                prediction_tensors.append(torch.softmax(logits, dim=1))
-                del derm_tensor
-        
-        probs = torch.stack(prediction_tensors, dim=0).mean(dim=0)
-        probs_np = probs[0].cpu().numpy()
+        probs_np = await asyncio.to_thread(_run_inference, dermoscopic_images)
+        probs = torch.from_numpy(probs_np).unsqueeze(0)
             
         pred_label, conf_score = interpret_prediction(probs)
         review_assessments = [item for item in image_assessments if item["status"] != "plausible"]
