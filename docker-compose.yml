@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sudermdb
+      POSTGRES_USER: suderm
+      POSTGRES_PASSWORD: suderm_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U suderm -d sudermdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://suderm:suderm_pass@db:5432/sudermdb
+      SUDERM_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      SUDERM_ADMIN_EMAIL: admin@suderm.local
+      SUDERM_ADMIN_PASSWORD: Admin123!
+      SUDERM_SECURE_COOKIES: "false"
+      SUDERM_INFERENCE_MAX_CONCURRENCY: "2"
+    volumes:
+      - ./backend/static:/app/static
+      - model_weights:/app/weights
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  model_weights:
