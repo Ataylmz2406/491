@@ -12,6 +12,10 @@ validation_outputs/
 *.pth.tar
 *.pkl
 
+# Environment variables
+.env
+backend/.env
+
 # Python temporary
 __pycache__/
 *.py[cod]
