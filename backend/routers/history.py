@@ -54,6 +54,7 @@ def create_history_item(payload: DiagnosisIn, authorization: str = Header(defaul
                 prediction, confidence_score, created_at, lesion_location
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
             """,
             (
                 payload.date, payload.diagnosis, payload.confidence, payload.location, payload.status,
@@ -61,6 +62,7 @@ def create_history_item(payload: DiagnosisIn, authorization: str = Header(defaul
                 doctor_id, doctor_name, payload.diagnosis, payload.confidence, now, payload.location,
             ),
         )
+        new_id = cursor.fetchone()["id"]
         conn.commit()
         row = conn.execute(
             """
@@ -68,7 +70,7 @@ def create_history_item(payload: DiagnosisIn, authorization: str = Header(defaul
                    patient_id, age_group, sex, skin_tone
             FROM diagnoses WHERE id = ?
             """,
-            (cursor.lastrowid,),
+            (new_id,),
         ).fetchone()
         return dict(row)
     finally:

@@ -277,6 +277,7 @@ def create_second_opinion_post(
                 question_text, lesion_location, diagnosis, age_group, sex, skin_tone
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
             """,
             (
                 now, now, "open", int(payload.is_anonymous), requester_identity,
@@ -290,7 +291,7 @@ def create_second_opinion_post(
                 clean_optional_text(payload.skin_tone, 64),
             ),
         )
-        post_id = cursor.lastrowid
+        post_id = cursor.fetchone()["id"]
         for idx, image_url in enumerate(cleaned_image_urls):
             conn.execute(
                 "INSERT INTO second_opinion_images (post_id, image_url, sort_order) VALUES (?, ?, ?)",
@@ -395,9 +396,11 @@ def create_second_opinion_comment(
             INSERT INTO second_opinion_comments
               (post_id, created_at, is_anonymous, created_by_identity, author_name, comment_text)
             VALUES (?, ?, ?, ?, ?, ?)
+            RETURNING id
             """,
             (post_id, now, int(payload.is_anonymous), requester_identity, author_name, comment_text),
         )
+        new_comment_id = cursor.fetchone()["id"]
         conn.execute(
             "UPDATE second_opinion_posts SET updated_at = ? WHERE id = ?", (now, post_id)
         )
@@ -407,7 +410,7 @@ def create_second_opinion_comment(
             SELECT id, post_id, created_at, is_anonymous, created_by_identity, author_name, comment_text
             FROM second_opinion_comments WHERE id = ?
             """,
-            (cursor.lastrowid,),
+            (new_comment_id,),
         ).fetchone()
         return _serialize_comment(row, requester_identity)
     finally:

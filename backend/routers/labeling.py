@@ -135,6 +135,7 @@ def create_mil10k_label(
                   (image_path, image_folder, image_filename, classification,
                    confidence_score, labeled_by_identity, doctor_name, doctor_affiliation, labeled_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
                 """,
                 (
                     payload.image_path, payload.image_folder, payload.image_filename,
@@ -142,7 +143,7 @@ def create_mil10k_label(
                     doctor_name, doctor_affiliation, now,
                 ),
             )
-            label_id = cursor.lastrowid
+            label_id = cursor.fetchone()["id"]
 
         conn.commit()
         row = conn.execute(

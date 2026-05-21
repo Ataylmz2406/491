@@ -1,6 +1,6 @@
 import secrets
-import sqlite3
 
+import psycopg2.errors
 from fastapi import APIRouter, Header, HTTPException, Request, Response, Cookie
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -97,7 +97,7 @@ def auth_register(request: Request, payload: AuthLoginRequest, response: Respons
                  full_name, phone_number, hospital, doctor_id, now),
             )
             conn.commit()
-        except sqlite3.IntegrityError:
+        except psycopg2.errors.UniqueViolation:
             raise HTTPException(status_code=409, detail="User already exists")
     finally:
         conn.close()

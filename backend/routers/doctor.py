@@ -48,6 +48,7 @@ def save_doctor_analysis(
                 prediction, confidence_score, created_at, lesion_location
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
             """,
             (
                 now, clean_prediction, confidence_score, clean_lesion_location, "completed",
@@ -55,9 +56,10 @@ def save_doctor_analysis(
                 clean_prediction, confidence_score, now, clean_lesion_location,
             ),
         )
+        new_id = cursor.fetchone()["id"]
         conn.commit()
         return {
-            "id": cursor.lastrowid,
+            "id": new_id,
             "date": now,
             "prediction": clean_prediction,
             "confidence_score": confidence_score,
