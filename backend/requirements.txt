@@ -12,3 +12,4 @@ scikit-learn
 tqdm
 matplotlib
 slowapi
+psycopg2-binary

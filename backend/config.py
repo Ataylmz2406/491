@@ -4,8 +4,12 @@ from model_utils import MODEL_CHECKPOINT_NAME
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_WEIGHTS = os.path.abspath(os.path.join(BASE_DIR, MODEL_CHECKPOINT_NAME))
-DB_PATH = os.path.join(BASE_DIR, "suderm.db")
 MIL10K_DATASET_PATH = os.path.join(BASE_DIR, "..", "Mil10K images")
+
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://suderm:suderm_pass@localhost:5432/sudermdb",
+)
 
 PREDICT_ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 PREDICT_MAX_IMAGE_BYTES = 8 * 1024 * 1024
