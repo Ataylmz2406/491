@@ -1,3 +1,12 @@
+---
+title: SUDerm
+emoji: 🔬
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+---
+
 # SUDerm - Skin Lesion Analysis
 
 A SwinV2-based AI application for professional skin lesion analysis.
@@ -82,3 +91,11 @@ The backend supports these optional environment variables:
 - `SUDERM_ACCESS_TOKEN_TTL_MINUTES`: access-token lifetime. Default: `15`
 - `SUDERM_REFRESH_TOKEN_TTL_DAYS`: refresh-token cookie lifetime. Default: `7`
 - `SUDERM_SECURE_COOKIES`: set to `true` when serving over HTTPS.
+
+## Hugging Face Deployment
+
+The root `Dockerfile` builds the React frontend, serves it from the FastAPI backend, and runs the Space on port `7860`.
+
+Automatic deployment is handled by `.github/workflows/deploy-huggingface.yml`. The GitHub repository must define an Actions secret named `HF_TOKEN` with write access to the `suderm/suderm` Hugging Face Space.
+
+The model checkpoint is not stored in GitHub. The workflow downloads the already-uploaded Space artifact `MILK10k_SwinV2_ISICinit_fold4_best.bin` before uploading the updated app files back to Hugging Face.

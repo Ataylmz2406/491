@@ -7,7 +7,7 @@ import torch
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -15,6 +15,7 @@ from slowapi.util import get_remote_address
 
 import state
 from config import (
+    BASE_DIR,
     CORS_ALLOWED_ORIGINS,
     DEVICE,
     HEATMAP_DIR,
@@ -36,6 +37,8 @@ from routers import auth, admin, doctor, history, second_opinion, predict, label
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("suderm")
+FRONTEND_DIST = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend", "dist"))
+FRONTEND_INDEX = os.path.join(FRONTEND_DIST, "index.html")
 
 
 @asynccontextmanager
@@ -108,6 +111,13 @@ app.add_middleware(
 
 
 @app.middleware("http")
+async def strip_api_prefix(request: Request, call_next):
+    if request.scope.get("path", "").startswith("/api/"):
+        request.scope["path"] = request.scope["path"][4:]
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def attach_request_id(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request.state.request_id = request_id
@@ -156,6 +166,8 @@ app.include_router(labeling.router)
 
 @app.get("/")
 def read_root():
+    if os.path.exists(FRONTEND_INDEX):
+        return FileResponse(FRONTEND_INDEX)
     return {"message": "SUDerm - MILK10k SwinV2 Skin Lesion Analysis API (Sabanci University)"}
 
 
@@ -180,3 +192,16 @@ def health_check():
         },
         "database": {"connected": db_ok},
     }
+
+
+if os.path.isdir(FRONTEND_DIST):
+    assets_dir = os.path.join(FRONTEND_DIST, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend-assets")
+
+    @app.get("/{full_path:path}")
+    def serve_frontend(full_path: str):
+        requested = os.path.abspath(os.path.join(FRONTEND_DIST, full_path))
+        if os.path.commonpath([FRONTEND_DIST, requested]) == FRONTEND_DIST and os.path.isfile(requested):
+            return FileResponse(requested)
+        return FileResponse(FRONTEND_INDEX)
