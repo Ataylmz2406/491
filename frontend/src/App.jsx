@@ -72,6 +72,7 @@ function App() {
   // --- Image State ---
   const [dermFiles, setDermFiles] = useState([]);
   const [dermPreviews, setDermPreviews] = useState([]);
+  const [imageQualityNotes, setImageQualityNotes] = useState([]);
   const [clinFile, setClinFile] = useState(null);
   const [clinPreview, setClinPreview] = useState(null);
 
@@ -164,6 +165,14 @@ function App() {
       maxImageSize: 'Each image must be 8 MB or smaller.',
       maxDermoscopicImages: `You can upload up to ${MAX_DERMOSCOPIC_IMAGES} dermoscopic images.`,
       dermoscopicRequired: 'At least one dermoscopic image is required for analysis.',
+      severeImageQuality: 'One image was rejected because it appears too blurry, too dark/bright, or too low-resolution. Retake it using the guide below.',
+      qualityCheckUnavailable: 'Image quality could not be checked in this browser.',
+      qualityLowResolution: 'Low resolution: move closer or use the rear camera.',
+      qualityBlur: 'Possible blur: tap the lesion to focus and move back to 10-15 cm.',
+      qualityTooDark: 'Too dark: move to brighter indirect light.',
+      qualityTooBright: 'Too bright/glare: avoid direct flash or harsh reflection.',
+      qualityAcceptable: 'Image quality looks acceptable.',
+      qualityUnreadable: 'Image could not be checked. Please use a clear JPG, PNG, WebP, HEIC, or HEIF.',
       caseSaved: 'Case saved successfully!',
       loginRequiredFeature: 'Please log in as a doctor to access this feature.'
     },
@@ -217,6 +226,14 @@ function App() {
       maxImageSize: 'Her görüntü 8 MB veya daha küçük olmalıdır.',
       maxDermoscopicImages: `En fazla ${MAX_DERMOSCOPIC_IMAGES} dermatoskopik görüntü yükleyebilirsiniz.`,
       dermoscopicRequired: 'Analiz için en az bir dermatoskopik görüntü gereklidir.',
+      severeImageQuality: 'Bir görüntü çok bulanık, çok karanlık/parlak veya çok düşük çözünürlüklü göründüğü için reddedildi. Aşağıdaki kılavuza göre yeniden çekin.',
+      qualityCheckUnavailable: 'Bu tarayıcıda görüntü kalitesi kontrol edilemedi.',
+      qualityLowResolution: 'Düşük çözünürlük: biraz yaklaşın veya arka kamerayı kullanın.',
+      qualityBlur: 'Olası bulanıklık: lezyona dokunarak odaklayın ve kamerayı 10-15 cm mesafeye alın.',
+      qualityTooDark: 'Çok karanlık: daha aydınlık ve dolaylı ışık kullanın.',
+      qualityTooBright: 'Çok parlak/parlama var: doğrudan flaş veya sert yansımadan kaçının.',
+      qualityAcceptable: 'Görüntü kalitesi kabul edilebilir görünüyor.',
+      qualityUnreadable: 'Görüntü kontrol edilemedi. Lütfen net bir JPG, PNG, WebP, HEIC veya HEIF kullanın.',
       caseSaved: 'Vaka başarılı şekilde kaydedildi!',
       loginRequiredFeature: 'Bu özelliğe erişmek için doktor olarak giriş yapın.'
     }
@@ -466,6 +483,8 @@ function App() {
   const isMobileHeicImage = (file) =>
     SUPPORTED_MOBILE_IMAGE_TYPES.has(file.type) || /\.(heic|heif)$/i.test(file.name || '');
 
+  const getImageNoteKey = (file) => `${file.name}:${file.size}:${file.lastModified}`;
+
   const transformImageFile = (file, transform) =>
     new Promise((resolve, reject) => {
       const objectUrl = URL.createObjectURL(file);
@@ -533,9 +552,85 @@ function App() {
       img.src = objectUrl;
     });
 
+  const assessImageQuality = (file) =>
+    new Promise((resolve) => {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const sourceWidth = img.naturalWidth || img.width;
+        const sourceHeight = img.naturalHeight || img.height;
+        const sampleSize = 192;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        if (!ctx) {
+          resolve({ severity: 'warn', messages: [t.qualityCheckUnavailable] });
+          return;
+        }
+
+        canvas.width = sampleSize;
+        canvas.height = sampleSize;
+        ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+        const { data } = ctx.getImageData(0, 0, sampleSize, sampleSize);
+        const gray = new Float32Array(sampleSize * sampleSize);
+        let brightness = 0;
+
+        for (let i = 0, p = 0; i < data.length; i += 4, p += 1) {
+          const value = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          gray[p] = value;
+          brightness += value;
+        }
+        brightness /= gray.length;
+
+        const laplacianValues = [];
+        for (let y = 1; y < sampleSize - 1; y += 1) {
+          for (let x = 1; x < sampleSize - 1; x += 1) {
+            const idx = y * sampleSize + x;
+            laplacianValues.push(
+              4 * gray[idx] -
+              gray[idx - 1] -
+              gray[idx + 1] -
+              gray[idx - sampleSize] -
+              gray[idx + sampleSize]
+            );
+          }
+        }
+
+        const lapMean = laplacianValues.reduce((sum, value) => sum + value, 0) / laplacianValues.length;
+        const lapVariance = laplacianValues.reduce((sum, value) => sum + (value - lapMean) ** 2, 0) / laplacianValues.length;
+        const minSide = Math.min(sourceWidth, sourceHeight);
+        const messages = [];
+        let severity = 'ok';
+
+        if (minSide < 224 || lapVariance < 18 || brightness < 35 || brightness > 235) {
+          severity = 'block';
+        } else if (minSide < 384 || lapVariance < 45 || brightness < 55 || brightness > 220) {
+          severity = 'warn';
+        }
+
+        if (minSide < 384) messages.push(t.qualityLowResolution);
+        if (lapVariance < 45) messages.push(t.qualityBlur);
+        if (brightness < 55) messages.push(t.qualityTooDark);
+        if (brightness > 220) messages.push(t.qualityTooBright);
+        if (messages.length === 0) messages.push(t.qualityAcceptable);
+
+        resolve({ severity, messages });
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve({ severity: 'block', messages: [t.qualityUnreadable] });
+      };
+
+      img.src = objectUrl;
+    });
+
   const validateImageFiles = async (files, availableSlots) => {
     const accepted = [];
     const messages = [];
+    const notes = [];
 
     for (const file of files) {
       const isSupportedType = SUPPORTED_ANALYSIS_UPLOAD_TYPES.has(file.type) || isMobileHeicImage(file);
@@ -551,11 +646,34 @@ function App() {
 
       if (isMobileHeicImage(file)) {
         try {
-          accepted.push(await transformImageFile(file, 'normalize-jpeg'));
+          const convertedFile = await transformImageFile(file, 'normalize-jpeg');
+          const quality = await assessImageQuality(convertedFile);
+          notes.push({
+            key: getImageNoteKey(convertedFile),
+            name: convertedFile.name,
+            severity: quality.severity,
+            messages: quality.messages,
+          });
+          if (quality.severity === 'block') {
+            messages.push(t.severeImageQuality);
+            continue;
+          }
+          accepted.push(convertedFile);
         } catch {
           messages.push('HEIC/HEIF could not be converted in this browser. Please export it as JPG and try again.');
         }
       } else {
+        const quality = await assessImageQuality(file);
+        notes.push({
+          key: getImageNoteKey(file),
+          name: file.name,
+          severity: quality.severity,
+          messages: quality.messages,
+        });
+        if (quality.severity === 'block') {
+          messages.push(t.severeImageQuality);
+          continue;
+        }
         accepted.push(file);
       }
     }
@@ -567,6 +685,7 @@ function App() {
     return {
       files: accepted.slice(0, availableSlots),
       message: [...new Set(messages)].join(' '),
+      notes,
     };
   };
 
@@ -586,14 +705,20 @@ function App() {
         ]);
       }
 
+      setImageQualityNotes((prev) => [...prev, ...validation.notes]);
       setError(validation.message || null);
     } else {
       const validation = await validateImageFiles(selectedFiles.slice(0, 1), 1);
       if (validation.files.length > 0) {
         if (clinPreview) URL.revokeObjectURL(clinPreview);
+        if (clinFile) {
+          const oldClinicalKey = getImageNoteKey(clinFile);
+          setImageQualityNotes((prev) => prev.filter((note) => note.key !== oldClinicalKey));
+        }
         setClinFile(validation.files[0]);
         setClinPreview(URL.createObjectURL(validation.files[0]));
       }
+      setImageQualityNotes((prev) => [...prev, ...validation.notes]);
       setError(validation.message || null);
     }
 
@@ -622,18 +747,28 @@ function App() {
   const clearFile = (type, index = null) => {
     if (type === 'dermoscopic') {
       if (index !== null) {
+        const removedFile = dermFiles[index];
         URL.revokeObjectURL(dermPreviews[index]);
         // Remove specific image by index
         setDermFiles(dermFiles.filter((_, i) => i !== index));
         setDermPreviews(dermPreviews.filter((_, i) => i !== index));
+        if (removedFile) {
+          const removedKey = getImageNoteKey(removedFile);
+          setImageQualityNotes((prev) => prev.filter((note) => note.key !== removedKey));
+        }
       } else {
         // Clear all dermoscopic images and reset case
         dermPreviews.forEach((preview) => URL.revokeObjectURL(preview));
         setDermFiles([]);
         setDermPreviews([]);
+        setImageQualityNotes([]);
         resetCurrentCase();
       }
     } else {
+      if (clinFile) {
+        const removedKey = getImageNoteKey(clinFile);
+        setImageQualityNotes((prev) => prev.filter((note) => note.key !== removedKey));
+      }
       if (clinPreview) URL.revokeObjectURL(clinPreview);
       setClinFile(null);
       setClinPreview(null);
@@ -734,6 +869,7 @@ function App() {
     setError(null);
     setDermFiles([]);
     setDermPreviews([]);
+    setImageQualityNotes([]);
     setClinFile(null);
     setClinPreview(null);
     setShowClinCheckbox(false);
@@ -1098,6 +1234,7 @@ function App() {
                         handleFileChange={handleFileChange}
                         clearFile={clearFile}
                         editDermoscopicImage={editDermoscopicImage}
+                        imageQualityNotes={imageQualityNotes}
                         showClinical={showClinCheckbox && userType !== 'personal'}
                       />
                       {/* checkbox only visible after a dermoscopic file is selected and not in personal mode */}

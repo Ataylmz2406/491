@@ -91,6 +91,9 @@ The backend supports these optional environment variables:
 - `SUDERM_ACCESS_TOKEN_TTL_MINUTES`: access-token lifetime. Default: `15`
 - `SUDERM_REFRESH_TOKEN_TTL_DAYS`: refresh-token cookie lifetime. Default: `7`
 - `SUDERM_SECURE_COOKIES`: set to `true` when serving over HTTPS.
+- `SUDERM_MODEL_CHECKPOINT_SHA256`: trusted SHA256 for `MILK10k_SwinV2_ISICinit_fold4_best.pth`. Default is `96183b808508b3e357a1f92ecadc0f30d14a77c15aa53d420154eb54b45faae5`.
+- `SUDERM_ALLOW_UNTRUSTED_CHECKPOINT`: set to `true` only for local experiments where checkpoint hash verification is intentionally disabled. Do not use in deployment.
+- `SUDERM_ALLOW_UNSAFE_CHECKPOINT_LOAD`: set to `true` only for a trusted local legacy checkpoint that cannot load with `weights_only=True`.
 
 ## Hugging Face Deployment
 

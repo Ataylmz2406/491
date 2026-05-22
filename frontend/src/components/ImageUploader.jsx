@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
-import { Camera, Crop, FolderOpen, ImageIcon, RotateCw, Upload, X, ZoomIn } from 'lucide-react';
+import { AlertCircle, Camera, CheckCircle, ChevronDown, ChevronUp, Crop, FolderOpen, ImageIcon, RotateCw, Upload, X, ZoomIn } from 'lucide-react';
 
 export default function ImageUploader({
     language = 'en',
     userType = null,
     dermFiles, dermPreviews, clinFile, clinPreview, handleFileChange, clearFile,
     editDermoscopicImage,
+    imageQualityNotes = [],
     showClinical = true
 }) {
     const [zoomedImage, setZoomedImage] = useState(null);
     const [isDraggingDerm, setIsDraggingDerm] = useState(false);
     const [isDraggingClin, setIsDraggingClin] = useState(false);
+    const [guideExpanded, setGuideExpanded] = useState(false);
+    const [guideDismissed, setGuideDismissed] = useState(false);
 
     const translations = {
         en: {
@@ -31,6 +34,25 @@ export default function ImageUploader({
             invalid: 'Not valid',
             chooseImages: 'Choose images',
             seeExampleImages: '(see example images)',
+            guideTitle: 'Photo guide for accurate analysis',
+            guideSubtitle: 'Use three views when possible. Best input is dermoscopic.',
+            guideSummary: 'Macro close-up: 10-15 cm, 2x optical zoom, lesion centered.',
+            showGuide: 'Show guide',
+            hideGuide: 'Hide guide',
+            dismissGuide: 'Dismiss photo guide',
+            contextShot: 'Context',
+            contextDesc: 'Show body location and nearby landmarks.',
+            contextDistance: '50-100 cm',
+            midShot: 'Mid-range',
+            midDesc: 'Show lesion with surrounding healthy skin.',
+            midDistance: '20-40 cm',
+            macroShot: 'Macro (Close-Up)',
+            macroDesc: 'Fine detail: color, texture, and border traits.',
+            macroDistance: '10-15 cm, use 2x optical zoom',
+            macroFrame: 'Lesion centered with a small margin of healthy skin.',
+            qualityTitle: 'Image quality feedback',
+            equityNote: 'Skin-tone safety: AI accuracy can be lower on underrepresented darker skin tones. Use review-required results conservatively and consult a clinician for changing, crusted, bleeding, or non-healing lesions.',
+            quickTips: 'Rear camera, tap-to-focus, indirect light, no filters, no digital zoom, no harsh flash.',
             orDragImagesHere: 'or drag images here',
             orDragImageHere: 'or drag an image here',
             rotateImage: 'Rotate image',
@@ -54,6 +76,25 @@ export default function ImageUploader({
             invalid: 'Geçersiz',
             chooseImages: 'Görüntüleri seç',
             seeExampleImages: '(örnek resimleri göster)',
+            guideTitle: 'Doğru analiz için fotoğraf kılavuzu',
+            guideSubtitle: 'Mümkünse üç görünüm kullanın. En iyi giriş dermatoskopiktir.',
+            guideSummary: 'Makro yakın çekim: 10-15 cm, 2x optik zoom, lezyon merkezde.',
+            showGuide: 'Kılavuzu göster',
+            hideGuide: 'Kılavuzu gizle',
+            dismissGuide: 'Fotoğraf kılavuzunu kapat',
+            contextShot: 'Bağlam',
+            contextDesc: 'Vücut konumunu ve yakın işaretleri gösterin.',
+            contextDistance: '50-100 cm',
+            midShot: 'Orta mesafe',
+            midDesc: 'Lezyonu çevre sağlam deri ile gösterin.',
+            midDistance: '20-40 cm',
+            macroShot: 'Makro (Yakın Çekim)',
+            macroDesc: 'İnce detay: renk, doku ve sınır özellikleri.',
+            macroDistance: '10-15 cm, 2x optik zoom kullanın',
+            macroFrame: 'Lezyon merkezde, çevrede az miktarda sağlam deri görünür.',
+            qualityTitle: 'Görüntü kalitesi geri bildirimi',
+            equityNote: 'Cilt tonu güvenliği: AI doğruluğu yeterince temsil edilmeyen koyu cilt tonlarında daha düşük olabilir. İnceleme gerektiren sonuçları dikkatle ele alın ve değişen, kabuklu, kanayan veya iyileşmeyen lezyonlarda klinisyene danışın.',
+            quickTips: 'Arka kamera, dokun-odakla, dolaylı ışık, filtresiz, dijital zoom yok, sert flaş yok.',
             orDragImagesHere: 'veya resimleri buraya sürükleyin',
             orDragImageHere: 'veya bir resmi buraya sürükleyin',
             rotateImage: 'Görüntüyü döndür',
@@ -98,6 +139,101 @@ export default function ImageUploader({
         if (dermPreviews.length === 2) return 'grid-cols-2';
         if (dermPreviews.length === 3) return 'grid-cols-3';
         return 'grid-cols-2';
+    };
+
+    const captureGuideSteps = [
+        { title: t.contextShot, distance: t.contextDistance, description: t.contextDesc, frame: 'wide', icon: ImageIcon },
+        { title: t.midShot, distance: t.midDistance, description: t.midDesc, frame: 'mid', icon: Camera },
+        { title: t.macroShot, distance: t.macroDistance, description: t.macroDesc, frame: 'macro', icon: ZoomIn },
+    ];
+
+    const renderCaptureGuide = () => {
+        if (guideDismissed) return null;
+
+        return (
+            <div className="mb-4 rounded-lg border border-brand-100 bg-white/90 shadow-sm">
+                <div className="flex items-start justify-between gap-3 px-3 py-2.5">
+                    <div className="flex min-w-0 items-start gap-2">
+                        <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-700" />
+                        <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-800">{t.guideTitle}</p>
+                            <p className="text-xs text-slate-500">{guideExpanded ? t.guideSubtitle : t.guideSummary}</p>
+                        </div>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-1">
+                        <button
+                            type="button"
+                            onClick={() => setGuideExpanded((value) => !value)}
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                        >
+                            {guideExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            {guideExpanded ? t.hideGuide : t.showGuide}
+                        </button>
+                        <button
+                            type="button"
+                            aria-label={t.dismissGuide}
+                            onClick={() => setGuideDismissed(true)}
+                            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+
+                <div className={`overflow-hidden border-t border-slate-100 transition-all duration-300 ease-in-out ${guideExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+                    <div className="grid gap-2 p-3 md:grid-cols-3">
+                        {captureGuideSteps.map((step) => {
+                            const Icon = step.icon;
+                            return (
+                                <div key={step.title} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                                    <div className="flex items-center gap-2">
+                                        <Icon className="h-4 w-4 text-brand-700" />
+                                        <p className="text-xs font-bold text-slate-800">{step.title}</p>
+                                    </div>
+                                    <p className="mt-1 text-xs font-semibold text-brand-700">{step.distance}</p>
+                                    <p className="mt-0.5 text-xs text-slate-600">{step.description}</p>
+                                    {step.frame === 'macro' && (
+                                        <p className="mt-0.5 text-xs text-slate-500">{t.macroFrame}</p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="space-y-2 px-3 pb-3">
+                        <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">{t.quickTips}</p>
+                        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{t.equityNote}</p>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderQualityNotes = () => {
+        if (imageQualityNotes.length === 0) return null;
+
+        return (
+            <div className="mb-4 rounded-lg border border-slate-200 bg-white p-3">
+                <div className="mb-2 flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-brand-700" />
+                    <p className="text-sm font-bold text-slate-800">{t.qualityTitle}</p>
+                </div>
+                <div className="space-y-2">
+                    {imageQualityNotes.slice(-4).map((note, index) => {
+                        const toneClasses = note.severity === 'ok'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                            : note.severity === 'block'
+                                ? 'border-red-200 bg-red-50 text-red-800'
+                                : 'border-amber-200 bg-amber-50 text-amber-900';
+                        return (
+                            <div key={`${note.key || note.name}-${index}`} className={`rounded-md border px-3 py-2 text-xs ${toneClasses}`}>
+                                <p className="font-semibold">{note.name}</p>
+                                <p>{note.messages.join(' ')}</p>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
     };
 
     const renderMobileCaptureActions = ({
@@ -205,6 +341,9 @@ export default function ImageUploader({
                     </button>
                 )}
                 </div>
+
+                    {renderCaptureGuide()}
+                    {renderQualityNotes()}
 
                     {dermPreviews.length === 0 ? (
                         <>
