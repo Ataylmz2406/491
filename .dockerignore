@@ -8,6 +8,15 @@
 **/.env
 **/suderm.db
 **/node_modules/
+**/dist/
 .git
+.github
+.vscode
 .gitignore
+Dockerfile
+docker-compose.yml
+Flutter/
+outputs/
+evaluation_outputs/
+tools/
 *.md

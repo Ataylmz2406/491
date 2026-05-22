@@ -1,12 +1,14 @@
 import logging
+import os
+import re
+import sqlite3
 
-import psycopg2
-import psycopg2.extras
 from datetime import datetime, timezone
 
 from config import (
     ADMIN_EMAIL,
     ADMIN_PASSWORD,
+    BASE_DIR,
     DATABASE_URL,
     SECOND_OPINION_MAX_IMAGE_DATA_URL_CHARS,
 )
@@ -15,26 +17,56 @@ from security import hash_password
 logger = logging.getLogger("suderm")
 
 
-# ---------------------------------------------------------------------------
-# psycopg2 wrapper — provides a sqlite3-compatible interface so all routers
-# work without knowing which database is underneath.
-# ---------------------------------------------------------------------------
+class DbRow(dict):
+    """Mapping row that also supports sqlite-style integer indexing."""
+
+    def __init__(self, mapping):
+        super().__init__(mapping)
+        self._values = list(mapping.values())
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._values[key]
+        return super().__getitem__(key)
+
 
 class DbCursor:
-    """Wraps a psycopg2 RealDictCursor to match sqlite3's cursor interface."""
+    """Wraps database cursors behind the subset used by the routers."""
 
-    def __init__(self, cursor: psycopg2.extensions.cursor):
+    def __init__(self, cursor):
         self._c = cursor
 
+    @staticmethod
+    def _wrap(row):
+        if row is None:
+            return None
+        if isinstance(row, DbRow):
+            return row
+        if isinstance(row, sqlite3.Row):
+            return DbRow({key: row[key] for key in row.keys()})
+        if isinstance(row, dict):
+            return DbRow(row)
+        return row
+
     def fetchone(self):
-        return self._c.fetchone()
+        return self._wrap(self._c.fetchone())
 
     def fetchall(self):
-        return self._c.fetchall()
+        return [self._wrap(row) for row in self._c.fetchall()]
 
     @property
     def rowcount(self) -> int:
         return self._c.rowcount
+
+
+class NoopCursor:
+    rowcount = 0
+
+    def fetchone(self):
+        return None
+
+    def fetchall(self):
+        return []
 
 
 class DbConn:
@@ -45,6 +77,9 @@ class DbConn:
     """
 
     def __init__(self, dsn: str):
+        import psycopg2
+        import psycopg2.extras
+
         self._conn = psycopg2.connect(dsn, cursor_factory=psycopg2.extras.RealDictCursor)
 
     def execute(self, sql: str, params=()) -> DbCursor:
@@ -63,7 +98,66 @@ class DbConn:
         self._conn.close()
 
 
-def get_db_connection() -> DbConn:
+class SqliteConn:
+    def __init__(self, db_path: str):
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self._conn = sqlite3.connect(db_path)
+        self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA foreign_keys = ON")
+
+    def execute(self, sql: str, params=()) -> DbCursor | NoopCursor:
+        sql = self._prepare_sql(sql)
+        if sql is None:
+            return NoopCursor()
+        cur = self._conn.cursor()
+        cur.execute(sql, params if params else ())
+        return DbCursor(cur)
+
+    def _prepare_sql(self, sql: str) -> str | None:
+        alter_match = re.match(
+            r"^\s*ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+(\w+)\s+(.+?)\s*$",
+            sql,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if alter_match:
+            table, column, column_type = alter_match.groups()
+            existing = {
+                row["name"]
+                for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            if column in existing:
+                return None
+            sql = f"ALTER TABLE {table} ADD COLUMN {column} {column_type}"
+
+        sql = re.sub(
+            r"\bSERIAL\s+PRIMARY\s+KEY\b",
+            "INTEGER PRIMARY KEY AUTOINCREMENT",
+            sql,
+            flags=re.IGNORECASE,
+        )
+        sql = re.sub(r"\bDOUBLE\s+PRECISION\b", "REAL", sql, flags=re.IGNORECASE)
+        return sql
+
+    def commit(self) -> None:
+        self._conn.commit()
+
+    def rollback(self) -> None:
+        self._conn.rollback()
+
+    def close(self) -> None:
+        self._conn.close()
+
+
+def _sqlite_path_from_url(database_url: str) -> str:
+    path = database_url.removeprefix("sqlite:///")
+    if not os.path.isabs(path):
+        path = os.path.join(BASE_DIR, path)
+    return os.path.abspath(path)
+
+
+def get_db_connection():
+    if DATABASE_URL.startswith("sqlite:///"):
+        return SqliteConn(_sqlite_path_from_url(DATABASE_URL))
     return DbConn(DATABASE_URL)
 
 

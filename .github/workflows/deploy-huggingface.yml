@@ -1,0 +1,49 @@
+name: Deploy to Hugging Face Space
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-huggingface-space
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Hugging Face CLI
+        run: pip install -U "huggingface_hub[cli]"
+
+      - name: Download model artifact from Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          hf download suderm/suderm MILK10k_SwinV2_ISICinit_fold4_best.bin --type space --local-dir .
+
+      - name: Upload to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          hf upload suderm/suderm . . --type space --commit-message "Deploy from GitHub $GITHUB_SHA" \
+            --exclude ".git/**" \
+            --exclude ".github/**" \
+            --exclude ".vscode/**" \
+            --exclude "backend/venv/**" \
+            --exclude "backend/__pycache__/**" \
+            --exclude "backend/suderm.db" \
+            --exclude "backend/static/**" \
+            --exclude "frontend/node_modules/**" \
+            --exclude "frontend/dist/**" \
+            --exclude "Flutter/**" \
+            --exclude "outputs/**" \
+            --exclude "evaluation_outputs/**" \
+            --exclude "tools/**" \
+            --exclude ".DS_Store" \
+            --exclude "CODE_REVIEW_REPORT.md" \
+            --exclude "MILK10k_SwinV2_ISICinit_fold4_best.pth"
