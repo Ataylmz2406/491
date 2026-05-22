@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import hmac
 import logging
 import os
 import uuid
@@ -15,11 +17,14 @@ from slowapi.util import get_remote_address
 
 import state
 from config import (
+    ALLOW_UNSAFE_CHECKPOINT_LOAD,
+    ALLOW_UNTRUSTED_CHECKPOINT,
     BASE_DIR,
     CORS_ALLOWED_ORIGINS,
     DEVICE,
     HEATMAP_DIR,
     INFERENCE_MAX_CONCURRENCY,
+    MODEL_WEIGHTS_SHA256,
     MODEL_WEIGHTS,
     SECOND_OPINION_POST_MAX_REQUEST_BYTES,
 )
@@ -41,6 +46,58 @@ FRONTEND_DIST = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend", "dist")
 FRONTEND_INDEX = os.path.join(FRONTEND_DIST, "index.html")
 
 
+def _file_sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as file_obj:
+        for chunk in iter(lambda: file_obj.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verify_model_weights_file(path: str) -> bool:
+    if not MODEL_WEIGHTS_SHA256:
+        if ALLOW_UNTRUSTED_CHECKPOINT:
+            logger.warning("Model checkpoint hash verification is disabled")
+            return False
+        raise RuntimeError("SUDERM_MODEL_CHECKPOINT_SHA256 must be configured")
+
+    actual_hash = _file_sha256(path)
+    if not hmac.compare_digest(actual_hash, MODEL_WEIGHTS_SHA256):
+        if ALLOW_UNTRUSTED_CHECKPOINT:
+            logger.warning(
+                "Model checkpoint hash mismatch ignored because SUDERM_ALLOW_UNTRUSTED_CHECKPOINT=true: %s",
+                actual_hash,
+            )
+            return False
+        raise RuntimeError(
+            "Model checkpoint hash mismatch. "
+            f"Expected {MODEL_WEIGHTS_SHA256}, got {actual_hash}."
+        )
+    return True
+
+
+def _load_model_checkpoint(path: str):
+    checkpoint_hash_verified = _verify_model_weights_file(path)
+    try:
+        return torch.load(path, map_location="cpu", weights_only=True)
+    except Exception as safe_load_error:
+        if not checkpoint_hash_verified and not ALLOW_UNSAFE_CHECKPOINT_LOAD:
+            raise RuntimeError(
+                "Checkpoint could not be loaded with torch.load(weights_only=True). "
+                "Configure a trusted SHA256 checkpoint hash, convert it to a safe format, "
+                "or set SUDERM_ALLOW_UNSAFE_CHECKPOINT_LOAD=true only for a trusted local checkpoint."
+            ) from safe_load_error
+
+        if checkpoint_hash_verified:
+            logger.warning("Falling back to pickle checkpoint loading after checkpoint trust verification")
+        else:
+            logger.warning(
+                "Falling back to unsafe pickle checkpoint loading because "
+                "SUDERM_ALLOW_UNSAFE_CHECKPOINT_LOAD=true"
+            )
+        return torch.load(path, map_location="cpu", weights_only=False)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     state.inference_semaphore = asyncio.Semaphore(INFERENCE_MAX_CONCURRENCY)
@@ -57,7 +114,7 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(f"Model weights file not found: {MODEL_WEIGHTS}")
 
     try:
-        checkpoint = torch.load(MODEL_WEIGHTS, map_location="cpu", weights_only=False)
+        checkpoint = _load_model_checkpoint(MODEL_WEIGHTS)
         validate_checkpoint_class_order(checkpoint)
         state.model = build_swinv2_model_from_checkpoint(checkpoint)
         logger.info(

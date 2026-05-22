@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 class ApiService {
   // For macOS simulator, use localhost. For physical device, use machine IP
@@ -22,7 +23,7 @@ class ApiService {
         'dermoscopic_image',
         dermBytes,
         filename: 'image.jpg',
-        contentType: http.MediaType('image', 'jpeg'),
+        contentType: MediaType('image', 'jpeg'),
       ),
     );
 
@@ -34,7 +35,7 @@ class ApiService {
           'clinical_image',
           clinBytes,
           filename: 'clinical.jpg',
-          contentType: http.MediaType('image', 'jpeg'),
+          contentType: MediaType('image', 'jpeg'),
         ),
       );
     }
