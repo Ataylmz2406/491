@@ -12,8 +12,7 @@ export default function ImageUploader({
     const [zoomedImage, setZoomedImage] = useState(null);
     const [isDraggingDerm, setIsDraggingDerm] = useState(false);
     const [isDraggingClin, setIsDraggingClin] = useState(false);
-    const [guideExpanded, setGuideExpanded] = useState(false);
-    const [guideDismissed, setGuideDismissed] = useState(false);
+    const [guideExpanded, setGuideExpanded] = useState(true);
 
     const translations = {
         en: {
@@ -39,7 +38,6 @@ export default function ImageUploader({
             guideSummary: 'Macro close-up: 10-15 cm, 2x optical zoom, lesion centered.',
             showGuide: 'Show guide',
             hideGuide: 'Hide guide',
-            dismissGuide: 'Dismiss photo guide',
             contextShot: 'Context',
             contextDesc: 'Show body location and nearby landmarks.',
             contextDistance: '50-100 cm',
@@ -81,7 +79,6 @@ export default function ImageUploader({
             guideSummary: 'Makro yakın çekim: 10-15 cm, 2x optik zoom, lezyon merkezde.',
             showGuide: 'Kılavuzu göster',
             hideGuide: 'Kılavuzu gizle',
-            dismissGuide: 'Fotoğraf kılavuzunu kapat',
             contextShot: 'Bağlam',
             contextDesc: 'Vücut konumunu ve yakın işaretleri gösterin.',
             contextDistance: '50-100 cm',
@@ -148,8 +145,6 @@ export default function ImageUploader({
     ];
 
     const renderCaptureGuide = () => {
-        if (guideDismissed) return null;
-
         return (
             <div className="mb-4 rounded-lg border border-brand-100 bg-white/90 shadow-sm">
                 <div className="flex items-start justify-between gap-3 px-3 py-2.5">
@@ -168,14 +163,6 @@ export default function ImageUploader({
                         >
                             {guideExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                             {guideExpanded ? t.hideGuide : t.showGuide}
-                        </button>
-                        <button
-                            type="button"
-                            aria-label={t.dismissGuide}
-                            onClick={() => setGuideDismissed(true)}
-                            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                        >
-                            <X className="h-4 w-4" />
                         </button>
                     </div>
                 </div>
